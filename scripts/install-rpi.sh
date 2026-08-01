@@ -31,6 +31,10 @@ for name in wwv-agent wwv-headless; do
   fi
 done
 
+if [[ ! -e /etc/wwv-monitors.json ]]; then
+  install -m 0600 "$REPO_DIR/config/wwv-monitors.json.example" /etc/wwv-monitors.json
+fi
+
 for service in wwv-agent wwv-headless-browser; do
   sed -e "s|@WWV_USER@|$SERVICE_USER|g" -e "s|@WWV_HOME@|$SERVICE_HOME|g" \
     "$REPO_DIR/systemd/${service}.service.in" > "/etc/systemd/system/${service}.service"

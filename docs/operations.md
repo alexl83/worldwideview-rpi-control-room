@@ -16,6 +16,11 @@ sudo WWV_USER="$USER" ./scripts/install-rpi.sh
 Review `/etc/wwv-agent.env` and `/etc/wwv-headless.env`. The WhatsApp allow-list is
 comma-separated E.164 digits without `+`, spaces or punctuation.
 
+Edit `/etc/wwv-monitors.json` to define geofenced watches. Each monitor specifies
+its center, radius, data-engine layers, polling interval, triggers and cooldown.
+When `notification.recipients` is omitted, alerts go to the first allow-listed
+number. The first successful run is always a silent baseline.
+
 Authenticate Codex under the same Unix account used by systemd:
 
 ```bash
@@ -84,6 +89,19 @@ curl -fsS http://127.0.0.1:5000/health
 Send `/status` through WhatsApp to verify relay reachability. For a functional
 test, ask the agent to move to a named city, enable a known populated layer and
 then re-read both camera and layer state.
+
+Monitor commands:
+
+```text
+/monitors
+/monitor tehran-security on
+/monitor tehran-security off
+/brief tehran-security
+```
+
+`/brief` returns the current picture without emitting an automatic notification.
+Scheduled checks query the data engine directly; Codex is called only after a
+deterministic trigger fires.
 
 ## Recovery
 

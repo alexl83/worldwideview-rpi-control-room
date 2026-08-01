@@ -29,6 +29,7 @@ remain in root-owned environment files on the Pi.
 ## What is included
 
 - `agent/`: allow-listed WhatsApp Web relay with one native Codex thread per chat.
+- automatic geofenced monitoring with silent baseline, deduplication and cooldown.
 - `headless/`: persistent Chromium session controlled by the WWV command bus.
 - `compose/`: Pi deployment for WWV, its data engine, PostgreSQL and Redis.
 - `scripts/`: Pi installer plus ARM64 cross-build/deploy with automatic rollback.
@@ -51,7 +52,8 @@ the deployment and control plane.
 1. Clone this repository and WorldWideView on the Mac.
 2. Copy `compose/docker-compose.rpi.yml` into the WWV checkout on the Pi.
 3. Copy the three files under `config/*.env.example` to their documented paths,
-   remove the `.example` suffix and fill in the values.
+   remove the `.example` suffix and fill in the values. Configure watches using
+   `config/wwv-monitors.json.example`.
 4. Install the runtime components on the Pi:
 
    ```bash

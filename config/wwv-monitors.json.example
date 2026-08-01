@@ -1,0 +1,27 @@
+{
+  "monitors": [
+    {
+      "id": "tehran-security",
+      "name": "Tehran security watch",
+      "enabled": true,
+      "center": { "lat": 35.6892, "lon": 51.389 },
+      "radiusKm": 75,
+      "layers": [
+        "conflict-events",
+        "civil-unrest",
+        "iranwarlive",
+        "military-aviation"
+      ],
+      "intervalSeconds": 300,
+      "seenRetentionHours": 168,
+      "triggers": {
+        "minimumFatalities": 1,
+        "aircraftEnteringArea": true,
+        "eventCountIncrease": 3
+      },
+      "notification": {
+        "cooldownMinutes": 30
+      }
+    }
+  ]
+}

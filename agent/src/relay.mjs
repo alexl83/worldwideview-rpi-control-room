@@ -10,11 +10,15 @@ import makeWASocket, {
 import pino from "pino";
 import QRCode from "qrcode";
 import qrcode from "qrcode-terminal";
+import { MonitorRuntime } from "./monitor.mjs";
 
 const mode = process.argv[2] ?? "run";
 const stateDir = process.env.WWV_AGENT_STATE_DIR ?? "/var/lib/wwv-agent";
 const authDir = path.join(stateDir, "whatsapp-auth");
 const sessionsFile = path.join(stateDir, "sessions.json");
+const monitorsFile = process.env.WWV_AGENT_MONITORS_FILE ?? "/etc/wwv-monitors.json";
+const monitorStateFile = path.join(stateDir, "monitor-state.json");
+const engineUrl = process.env.WWV_AGENT_ENGINE_URL ?? "http://127.0.0.1:5000";
 const workspace = process.env.WWV_AGENT_WORKSPACE ?? "/srv/worldwideview";
 const maxChars = Number(process.env.WWV_AGENT_MAX_MESSAGE_CHARS ?? 12000);
 const timeoutMs = Number(process.env.WWV_AGENT_TIMEOUT_MS ?? 600000);
@@ -27,6 +31,8 @@ const allowed = new Set(
 );
 const logger = pino({ level: process.env.LOG_LEVEL ?? "info" });
 const active = new Set();
+let monitorRuntime;
+let monitorTimer;
 
 function normalizeNumber(value) {
   return String(value ?? "").replace(/[^0-9]/g, "");
@@ -135,6 +141,59 @@ async function runCodex(threadId, prompt) {
   });
 }
 
+function monitorPrompt(monitor, result) {
+  return `Sei l'analista di una control room OSINT personale. Produci un alert WhatsApp conciso in italiano.
+Usa esclusivamente i dati JSON forniti: non aggiungere fatti, non fare altre query e non presentare assenza
+nel feed come assenza reale. Includi: titolo con gravità, luogo e raggio, novità rilevanti ordinate per
+importanza, distanza, fonte/link quando presente, stato dei feed, limiti e confidenza. Massimo 1200 caratteri.
+
+Monitor:
+${JSON.stringify({ id: monitor.id, name: monitor.name, center: monitor.center, radiusKm: monitor.radiusKm })}
+
+Feed:
+${JSON.stringify(result.feeds)}
+
+Eventi da analizzare:
+${JSON.stringify(result.triggered.slice(0, 20))}`;
+}
+
+async function analyzeMonitor(monitor, result) {
+  try {
+    const response = await runCodex(null, monitorPrompt(monitor, result));
+    if (response.text?.trim()) return response.text.trim();
+  } catch (error) {
+    logger.error({ error, monitor: monitor.id }, "monitor analysis failed");
+  }
+  const first = result.triggered[0];
+  return [
+    `🚨 ${monitor.name ?? monitor.id}`,
+    `${result.triggered.length} nuovi eventi entro ${monitor.radiusKm ?? 50} km.`,
+    first ? `${first.type} — ${first.location ?? "posizione non nominata"}, ${first.distanceKm} km.` : "",
+    "Analisi Codex non disponibile; verifica i feed prima di agire.",
+  ].filter(Boolean).join("\n");
+}
+
+async function notifyMonitor(sock, monitor, text) {
+  const configured = monitor.notification?.recipients;
+  const recipients = Array.isArray(configured) && configured.length
+    ? configured.map(normalizeNumber).filter((number) => allowed.has(number))
+    : [...allowed].slice(0, 1);
+  for (const number of recipients) {
+    for (const chunk of splitText(text)) {
+      await sock.sendMessage(`${number}@s.whatsapp.net`, { text: chunk });
+    }
+  }
+}
+
+function formatMonitorList() {
+  const entries = monitorRuntime?.list() ?? [];
+  if (!entries.length) return "Nessun monitor configurato.";
+  return entries.map((item) => [
+    `${item.enabled ? "🟢" : "⏸️"} ${item.id} — ${item.name}`,
+    `ultimo controllo: ${item.lastRun ?? "mai"}; ultimo alert: ${item.lastAlert ?? "mai"}`,
+  ].join("\n")).join("\n\n");
+}
+
 async function handleMessage(sock, msg) {
   const jid = msg.key.remoteJid;
   if (!jid || jid.endsWith("@g.us") || msg.key.fromMe) return;
@@ -163,12 +222,37 @@ async function handleMessage(sock, msg) {
   }
   if (text === "/status") {
     await sock.sendMessage(jid, {
-      text: `Relay attivo. Sessione: ${sessions[jid]?.threadId ?? "nuova"}. Sandbox: read-only.`,
+      text: `Relay attivo. Sessione: ${sessions[jid]?.threadId ?? "nuova"}. Sandbox: read-only. Monitor: ${monitorRuntime?.list().filter((item) => item.enabled).length ?? 0} attivi.`,
     });
     return;
   }
+  if (text === "/monitors") {
+    await sock.sendMessage(jid, { text: formatMonitorList() });
+    return;
+  }
+  const monitorToggle = text.match(/^\/monitor\s+(\S+)\s+(on|off|pause)$/i);
+  if (monitorToggle) {
+    const enabled = monitorToggle[2].toLowerCase() === "on";
+    const changed = monitorRuntime?.setEnabled(monitorToggle[1], enabled);
+    await sock.sendMessage(jid, {
+      text: changed ? `Monitor ${monitorToggle[1]} ${enabled ? "attivato" : "sospeso"}.` : `Monitor ${monitorToggle[1]} non trovato.`,
+    });
+    return;
+  }
+  const brief = text.match(/^\/brief\s+(\S+)$/i);
+  if (brief) {
+    try {
+      const result = await monitorRuntime.run(brief[1], { force: true, notify: false });
+      result.triggered = result.current;
+      const monitor = monitorRuntime.config().monitors.find((item) => item.id === brief[1]);
+      await sock.sendMessage(jid, { text: await analyzeMonitor(monitor, result) });
+    } catch (error) {
+      await sock.sendMessage(jid, { text: `Brief non disponibile: ${error.message}` });
+    }
+    return;
+  }
   if (text === "/help") {
-    await sock.sendMessage(jid, { text: "Comandi: /status, /new, /help. Ogni altro messaggio viene inviato a Codex." });
+    await sock.sendMessage(jid, { text: "Comandi: /status, /new, /monitors, /monitor <id> on|off, /brief <id>, /help. Ogni altro messaggio viene inviato a Codex." });
     return;
   }
 
@@ -219,7 +303,27 @@ async function connect() {
       process.stdout.write("Scansiona il QR da WhatsApp > Dispositivi collegati:\n");
       qrcode.generate(qr, { small: true });
     }
-    if (connection === "open") logger.info("WhatsApp connected");
+    if (connection === "open") {
+      logger.info("WhatsApp connected");
+      if (!monitorRuntime) {
+        monitorRuntime = new MonitorRuntime({
+          configFile: monitorsFile,
+          stateFile: monitorStateFile,
+          engineUrl,
+          logger,
+          analyze: analyzeMonitor,
+          notify: (monitor, text) => notifyMonitor(sock, monitor, text),
+        });
+      } else {
+        monitorRuntime.notify = (monitor, text) => notifyMonitor(sock, monitor, text);
+      }
+      if (!monitorTimer) {
+        monitorRuntime.tick().catch((error) => logger.error({ error }, "initial monitor tick failed"));
+        monitorTimer = setInterval(() => {
+          monitorRuntime.tick().catch((error) => logger.error({ error }, "monitor tick failed"));
+        }, 30_000);
+      }
+    }
     if (connection === "close") {
       const status = lastDisconnect?.error?.output?.statusCode;
       if (status === DisconnectReason.loggedOut) {
