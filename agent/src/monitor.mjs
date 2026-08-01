@@ -273,7 +273,13 @@ export class MonitorRuntime {
       const lastRun = Date.parse(state.monitors?.[monitor.id]?.lastRun ?? 0);
       const intervalMs = Math.max(60, Number(monitor.intervalSeconds ?? 300)) * 1000;
       if (enabled && now - lastRun >= intervalMs) {
-        this.run(monitor.id).catch((error) => this.logger.error({ error, id: monitor.id }, "monitor failed"));
+        try {
+          // Serialize checks because each run atomically replaces the shared
+          // state document. Parallel writes could drop another monitor's state.
+          await this.run(monitor.id);
+        } catch (error) {
+          this.logger.error({ error, id: monitor.id }, "monitor failed");
+        }
       }
     }
   }
