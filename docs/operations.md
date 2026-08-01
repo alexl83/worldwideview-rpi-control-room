@@ -60,6 +60,11 @@ file mounts `/run/wwv-agent` into the WWV container. Requests remain bound to th
 tab that opened the chat; closing that tab makes subsequent turns fail rather
 than falling back to the headless globe.
 
+Set `WWV_AGENT_HEADLESS_SESSION_ID` in `/etc/wwv-agent.env` to the same stable
+UUID used by `WWV_HEADLESS_SESSION_ID` in `/etc/wwv-headless.env`. Every
+WhatsApp turn is pinned server-side to that session; interactive frontend chats
+remain pinned to their originating browser tab.
+
 ## Cross-build and deploy
 
 Run the deploy script from the Mac. `WWV_SOURCE_DIR` must point to the upstream WWV

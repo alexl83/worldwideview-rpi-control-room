@@ -22,6 +22,7 @@ const monitorStateFile = path.join(stateDir, "monitor-state.json");
 const engineUrl = process.env.WWV_AGENT_ENGINE_URL ?? "http://127.0.0.1:5000";
 const frontendSocket = process.env.WWV_AGENT_FRONTEND_SOCKET ?? "/run/wwv-agent/chat.sock";
 const frontendToken = process.env.WWV_AGENT_SOCKET_TOKEN ?? "";
+const headlessSessionId = process.env.WWV_AGENT_HEADLESS_SESSION_ID ?? "";
 const workspace = process.env.WWV_AGENT_WORKSPACE ?? "/srv/worldwideview";
 const maxChars = Number(process.env.WWV_AGENT_MAX_MESSAGE_CHARS ?? 12000);
 const timeoutMs = Number(process.env.WWV_AGENT_TIMEOUT_MS ?? 600000);
@@ -39,6 +40,10 @@ let monitorTimer;
 
 function normalizeNumber(value) {
   return String(value ?? "").replace(/[^0-9]/g, "");
+}
+
+function isUuid(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
 function loadSessions() {
@@ -314,7 +319,7 @@ async function handleMessage(sock, msg) {
   }
   if (text === "/status") {
     await sock.sendMessage(jid, {
-      text: `Relay attivo. Sessione: ${sessions[jid]?.threadId ?? "nuova"}. Sandbox: read-only. Monitor: ${monitorRuntime?.list().filter((item) => item.enabled).length ?? 0} attivi.`,
+      text: `Relay attivo. Sessione: ${sessions[jid]?.threadId ?? "nuova"}. Globo: headless ${headlessSessionId.slice(0, 8)}. Sandbox: read-only. Monitor: ${monitorRuntime?.list().filter((item) => item.enabled).length ?? 0} attivi.`,
     });
     return;
   }
@@ -351,7 +356,14 @@ async function handleMessage(sock, msg) {
   active.add(jid);
   await sock.sendMessage(jid, { react: { text: "⏳", key: msg.key } });
   try {
-    const result = await runCodex(sessions[jid]?.threadId, text);
+    const pinnedPrompt = [
+      `Questa richiesta WhatsApp è rigidamente vincolata alla sessione WorldWideView headless ${headlessSessionId}.`,
+      "Usa e controlla esclusivamente tale sessione. Non scegliere né manovrare sessioni browser interattive.",
+      "Rispondi in italiano salvo diversa richiesta dell'utente.",
+      "",
+      text,
+    ].join("\n");
+    const result = await runCodex(sessions[jid]?.threadId, pinnedPrompt, { sessionId: headlessSessionId });
     if (result.threadId) {
       sessions[jid] = { threadId: result.threadId, updatedAt: new Date().toISOString() };
       saveSessions(sessions);
@@ -447,5 +459,6 @@ if (mode === "status") {
 
 if (!fs.existsSync(workspace)) throw new Error(`Workspace inesistente: ${workspace}`);
 if (mode === "run" && allowed.size === 0) throw new Error("WWV_AGENT_ALLOWED_NUMBERS è vuoto: avvio negato");
+if (mode === "run" && !isUuid(headlessSessionId)) throw new Error("WWV_AGENT_HEADLESS_SESSION_ID deve essere un UUID valido");
 if (mode === "run") startFrontendServer();
 await connect();
