@@ -6,6 +6,7 @@ services:
     volumes:
       - wwv-data:/app/data
       - ${WWV_PLUGINS_DIR:-/srv/worldwideview/public/plugins-local}:/app/public/plugins-local:ro
+      - /run/wwv-agent:/run/wwv-agent
     env_file:
       - /etc/worldwideview.env
     environment:

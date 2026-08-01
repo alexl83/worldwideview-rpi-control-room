@@ -13,6 +13,13 @@ The browser is part of the execution model: WWV's command bus controls a live
 globe session, not a server-side virtual camera. Keeping Chromium on the Pi removes
 the dependency on an operator laptop while preserving this model.
 
+Frontend chat travels through an authenticated Next.js route and a Unix socket to
+the relay. The browser supplies its tab-scoped session UUID; WWV verifies that the
+session belongs to the logged-in user and the MCP URL is pinned to it for the
+entire Codex turn. Resources, plugin tools and globe commands cannot fall back to
+the persistent headless session. The socket request is authenticated with the
+shared `WWV_AGENT_SOCKET_TOKEN` stored in both root-owned environment files.
+
 ## Build and deployment path
 
 The Mac runs an ARM64 Colima VM and builds the WWV image with BuildKit. The image

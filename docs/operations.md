@@ -54,6 +54,12 @@ After pairing:
 sudo systemctl enable --now wwv-headless-browser wwv-agent
 ```
 
+For frontend chat, generate one long random `WWV_AGENT_SOCKET_TOKEN` and place
+the same value in `/etc/wwv-agent.env` and `/etc/worldwideview.env`. The Compose
+file mounts `/run/wwv-agent` into the WWV container. Requests remain bound to the
+tab that opened the chat; closing that tab makes subsequent turns fail rather
+than falling back to the headless globe.
+
 ## Cross-build and deploy
 
 Run the deploy script from the Mac. `WWV_SOURCE_DIR` must point to the upstream WWV

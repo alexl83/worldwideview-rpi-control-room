@@ -30,6 +30,7 @@ remain in root-owned environment files on the Pi.
 
 - `agent/`: allow-listed WhatsApp Web relay with one native Codex thread per chat.
 - automatic geofenced monitoring with silent baseline, deduplication and cooldown.
+- authenticated frontend chat pinned to the originating WWV browser tab.
 - `headless/`: persistent Chromium session controlled by the WWV command bus.
 - `compose/`: Pi deployment for WWV, its data engine, PostgreSQL and Redis.
 - `scripts/`: Pi installer plus ARM64 cross-build/deploy with automatic rollback.

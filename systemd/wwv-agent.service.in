@@ -10,6 +10,8 @@ Group=@WWV_USER@
 WorkingDirectory=/opt/wwv-agent
 Environment=HOME=@WWV_HOME@
 EnvironmentFile=/etc/wwv-agent.env
+RuntimeDirectory=wwv-agent
+RuntimeDirectoryMode=0755
 ExecStart=/usr/bin/node /opt/wwv-agent/src/relay.mjs run
 Restart=on-failure
 RestartSec=5

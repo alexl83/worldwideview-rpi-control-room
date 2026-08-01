@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import http from "node:http";
 import path from "node:path";
 import process from "node:process";
 import { spawn } from "node:child_process";
@@ -19,6 +20,8 @@ const sessionsFile = path.join(stateDir, "sessions.json");
 const monitorsFile = process.env.WWV_AGENT_MONITORS_FILE ?? "/etc/wwv-monitors.json";
 const monitorStateFile = path.join(stateDir, "monitor-state.json");
 const engineUrl = process.env.WWV_AGENT_ENGINE_URL ?? "http://127.0.0.1:5000";
+const frontendSocket = process.env.WWV_AGENT_FRONTEND_SOCKET ?? "/run/wwv-agent/chat.sock";
+const frontendToken = process.env.WWV_AGENT_SOCKET_TOKEN ?? "";
 const workspace = process.env.WWV_AGENT_WORKSPACE ?? "/srv/worldwideview";
 const maxChars = Number(process.env.WWV_AGENT_MAX_MESSAGE_CHARS ?? 12000);
 const timeoutMs = Number(process.env.WWV_AGENT_TIMEOUT_MS ?? 600000);
@@ -78,9 +81,13 @@ function splitText(text) {
   return result.length ? result : ["Nessuna risposta prodotta."];
 }
 
-function codexArgs(threadId, prompt) {
+function codexArgs(threadId, prompt, { sessionId } = {}) {
   const common = ["--json", "--skip-git-repo-check"];
   if (model) common.push("--model", model);
+  if (sessionId) {
+    const url = `http://127.0.0.1:3000/api/mcp?sessionId=${encodeURIComponent(sessionId)}`;
+    common.push("--config", `mcp_servers.worldwideview.url=${JSON.stringify(url)}`);
+  }
   if (threadId) return ["exec", "resume", ...common, threadId, prompt];
   return [
     "exec",
@@ -93,9 +100,9 @@ function codexArgs(threadId, prompt) {
   ];
 }
 
-async function runCodex(threadId, prompt) {
+async function runCodex(threadId, prompt, options = {}) {
   return await new Promise((resolve, reject) => {
-    const child = spawn("codex", codexArgs(threadId, prompt), {
+    const child = spawn("codex", codexArgs(threadId, prompt, options), {
       cwd: workspace,
       env: process.env,
       stdio: ["ignore", "pipe", "pipe"],
@@ -138,6 +145,89 @@ async function runCodex(threadId, prompt) {
       if (code === 0) resolve({ threadId: newThreadId, text: finalText });
       else reject(new Error(stderr.trim() || `Codex terminato con codice ${code}`));
     });
+  });
+}
+
+function readRequestBody(request, limit = 64 * 1024) {
+  return new Promise((resolve, reject) => {
+    let body = "";
+    request.setEncoding("utf8");
+    request.on("data", (chunk) => {
+      body += chunk;
+      if (body.length > limit) reject(new Error("request too large"));
+    });
+    request.on("end", () => resolve(body));
+    request.on("error", reject);
+  });
+}
+
+function sendJson(response, status, payload) {
+  response.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
+  response.end(`${JSON.stringify(payload)}\n`);
+}
+
+async function handleFrontendChat(request, response) {
+  if (request.method !== "POST" || request.url !== "/chat") {
+    sendJson(response, 404, { error: "not found" });
+    return;
+  }
+  if (!frontendToken || request.headers.authorization !== `Bearer ${frontendToken}`) {
+    sendJson(response, 401, { error: "unauthorized" });
+    return;
+  }
+  try {
+    const body = JSON.parse(await readRequestBody(request));
+    const userId = String(body.userId ?? "");
+    const sessionId = String(body.sessionId ?? "");
+    const prompt = String(body.prompt ?? "").trim();
+    if (!userId || !/^[0-9a-f-]{36}$/i.test(sessionId) || !prompt || prompt.length > 12_000) {
+      sendJson(response, 400, { error: "invalid request" });
+      return;
+    }
+    const key = `frontend:${userId}:${sessionId}`;
+    const sessions = loadSessions();
+    const pinnedPrompt = [
+      `Richiesta proveniente dalla scheda WorldWideView ${sessionId}.`,
+      "Questa conversazione è rigidamente vincolata a tale scheda dal server MCP.",
+      "Non scegliere, interrogare o controllare altre sessioni, inclusa quella headless.",
+      "Rispondi in italiano salvo diversa richiesta dell'utente.",
+      "",
+      prompt,
+    ].join("\n");
+    const result = await runCodex(sessions[key]?.threadId, pinnedPrompt, { sessionId });
+    if (result.threadId) {
+      sessions[key] = { threadId: result.threadId, updatedAt: new Date().toISOString() };
+      saveSessions(sessions);
+    }
+    sendJson(response, 200, { text: result.text, threadId: result.threadId });
+  } catch (error) {
+    logger.error({ error }, "frontend chat failed");
+    sendJson(response, 500, { error: error.message });
+  }
+}
+
+function startFrontendServer() {
+  if (!frontendToken) {
+    logger.warn("WWV_AGENT_SOCKET_TOKEN is empty; frontend chat disabled");
+    return;
+  }
+  fs.mkdirSync(path.dirname(frontendSocket), { recursive: true, mode: 0o755 });
+  try {
+    const stat = fs.lstatSync(frontendSocket);
+    if (stat.isSocket()) fs.unlinkSync(frontendSocket);
+    else throw new Error(`${frontendSocket} exists and is not a socket`);
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+  const server = http.createServer((request, response) => {
+    handleFrontendChat(request, response).catch((error) => {
+      logger.error({ error }, "frontend request handler failed");
+      if (!response.headersSent) sendJson(response, 500, { error: "internal error" });
+    });
+  });
+  server.listen(frontendSocket, () => {
+    fs.chmodSync(frontendSocket, 0o666);
+    logger.info({ frontendSocket }, "frontend chat socket listening");
   });
 }
 
@@ -357,4 +447,5 @@ if (mode === "status") {
 
 if (!fs.existsSync(workspace)) throw new Error(`Workspace inesistente: ${workspace}`);
 if (mode === "run" && allowed.size === 0) throw new Error("WWV_AGENT_ALLOWED_NUMBERS è vuoto: avvio negato");
+if (mode === "run") startFrontendServer();
 await connect();
