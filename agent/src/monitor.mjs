@@ -44,8 +44,13 @@ function properties(item) {
 
 function fingerprint(layer, item) {
   const p = properties(item);
+  const sourceUrl = p?.source_url ?? p?.url ?? item?.source_url;
+  if (sourceUrl) {
+    return `${layer}:url:${crypto.createHash("sha256").update(String(sourceUrl)).digest("hex").slice(0, 24)}`;
+  }
   const explicit = item?.id ?? item?.event_id ?? item?.hex ?? p?.id ?? p?.event_id ?? p?.hex;
-  if (explicit) return `${layer}:${String(explicit)}`;
+  const volatileId = /^(gdelt|IRW-[^-]+)-\d{10,}-/i.test(String(explicit ?? ""));
+  if (explicit && !volatileId) return `${layer}:${String(explicit)}`;
   const stable = JSON.stringify({
     layer,
     lat: coordinates(item)?.lat,
@@ -53,6 +58,8 @@ function fingerprint(layer, item) {
     type: p?.type ?? p?.subType,
     place: p?.location ?? p?.place ?? p?.notes,
     time: p?.timestamp ?? p?.date ?? p?.occurredAt,
+    fatalities: p?.fatalities ?? p?.casualties ?? item?._osint_meta?.casualties,
+    summary: p?.event_summary ?? item?.event_summary,
   });
   return `${layer}:${crypto.createHash("sha256").update(stable).digest("hex").slice(0, 24)}`;
 }

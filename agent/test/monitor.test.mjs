@@ -48,3 +48,18 @@ test("events outside the radius are excluded", () => {
   const result = evaluateMonitor({ ...config, layers: ["conflict-events"] }, far, {}, 1_000);
   assert.equal(result.current.length, 0);
 });
+
+test("volatile collector IDs do not turn the same report into a new event", () => {
+  const first = { "conflict-events": { ok: true, data: { items: [{
+    id: "gdelt-1785616831987-35.7000-51.4000-0",
+    latitude: 35.7,
+    longitude: 51.4,
+    properties: { type: "Battles", date: "2026-08-01T20:30:00Z", notes: "Tehran", fatalities: 2 },
+  }] } } };
+  const baseline = evaluateMonitor({ ...config, layers: ["conflict-events"] }, first, {}, 1_000);
+  first["conflict-events"].data.items[0].id = "gdelt-1785617731987-35.7000-51.4000-0";
+  const result = evaluateMonitor(
+    { ...config, layers: ["conflict-events"] }, first, baseline.nextState, 2_000,
+  );
+  assert.equal(result.triggered.length, 0);
+});
