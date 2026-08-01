@@ -215,7 +215,7 @@ export class MonitorRuntime {
     return Object.fromEntries(entries);
   }
 
-  async run(id, { force = false, notify = true } = {}) {
+  async run(id, { force = false, notify = true, persist = true } = {}) {
     const monitor = (this.config().monitors ?? []).find((item) => item.id === id);
     if (!monitor) throw new Error(`Monitor sconosciuto: ${id}`);
     if (this.running.has(id)) return { skipped: "already-running" };
@@ -232,9 +232,21 @@ export class MonitorRuntime {
         && (!cooldownActive || force);
       const next = { ...previous, ...result.nextState };
       if (shouldAlert) next.lastAlert = new Date().toISOString();
-      state.monitors ??= {};
-      state.monitors[id] = next;
-      writeJson(this.stateFile, state);
+      if (persist) {
+        state.monitors ??= {};
+        state.monitors[id] = next;
+        writeJson(this.stateFile, state);
+      }
+
+      this.logger.info({
+        id,
+        baseline: result.baseline,
+        events: result.current.length,
+        newEvents: result.triggered.length,
+        shouldAlert,
+        cooldownActive: Boolean(cooldownActive),
+        persisted: persist,
+      }, "monitor check completed");
 
       if (shouldAlert && notify) {
         const text = await this.analyze(monitor, result);
@@ -259,4 +271,3 @@ export class MonitorRuntime {
     }
   }
 }
-

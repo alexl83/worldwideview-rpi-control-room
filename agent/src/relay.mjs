@@ -242,7 +242,7 @@ async function handleMessage(sock, msg) {
   const brief = text.match(/^\/brief\s+(\S+)$/i);
   if (brief) {
     try {
-      const result = await monitorRuntime.run(brief[1], { force: true, notify: false });
+      const result = await monitorRuntime.run(brief[1], { force: true, notify: false, persist: false });
       result.triggered = result.current;
       const monitor = monitorRuntime.config().monitors.find((item) => item.id === brief[1]);
       await sock.sendMessage(jid, { text: await analyzeMonitor(monitor, result) });
@@ -306,6 +306,11 @@ async function connect() {
     if (connection === "open") {
       logger.info("WhatsApp connected");
       if (!monitorRuntime) {
+        try {
+          fs.accessSync(monitorsFile, fs.constants.R_OK);
+        } catch (error) {
+          logger.warn({ error, monitorsFile }, "monitor configuration is not readable; monitoring disabled");
+        }
         monitorRuntime = new MonitorRuntime({
           configFile: monitorsFile,
           stateFile: monitorStateFile,

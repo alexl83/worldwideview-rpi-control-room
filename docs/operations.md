@@ -20,6 +20,8 @@ Edit `/etc/wwv-monitors.json` to define geofenced watches. Each monitor specifie
 its center, radius, data-engine layers, polling interval, triggers and cooldown.
 When `notification.recipients` is omitted, alerts go to the first allow-listed
 number. The first successful run is always a silent baseline.
+The service account must be able to read this file; the installer uses ownership
+`root:<service-user>` and mode `0640`.
 
 Authenticate Codex under the same Unix account used by systemd:
 
@@ -99,7 +101,8 @@ Monitor commands:
 /brief tehran-security
 ```
 
-`/brief` returns the current picture without emitting an automatic notification.
+`/brief` returns the current picture without emitting an automatic notification or
+marking new events as seen.
 Scheduled checks query the data engine directly; Codex is called only after a
 deterministic trigger fires.
 

@@ -32,7 +32,8 @@ for name in wwv-agent wwv-headless; do
 done
 
 if [[ ! -e /etc/wwv-monitors.json ]]; then
-  install -m 0600 "$REPO_DIR/config/wwv-monitors.json.example" /etc/wwv-monitors.json
+  install -o root -g "$SERVICE_USER" -m 0640 \
+    "$REPO_DIR/config/wwv-monitors.json.example" /etc/wwv-monitors.json
 fi
 
 for service in wwv-agent wwv-headless-browser; do
