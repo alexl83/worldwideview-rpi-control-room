@@ -58,7 +58,6 @@ function fingerprint(layer, item) {
     type: p?.type ?? p?.subType,
     place: p?.location ?? p?.place ?? p?.notes,
     time: p?.timestamp ?? p?.date ?? p?.occurredAt,
-    fatalities: p?.fatalities ?? p?.casualties ?? item?._osint_meta?.casualties,
     summary: p?.event_summary ?? item?.event_summary,
   });
   return `${layer}:${crypto.createHash("sha256").update(stable).digest("hex").slice(0, 24)}`;
@@ -69,6 +68,7 @@ function normalize(layer, item, center) {
   const point = coordinates(item);
   if (!point) return null;
   const p = properties(item);
+  const fatalities = number(p.fatalities ?? p.casualties ?? item?._osint_meta?.casualties) ?? 0;
   return {
     fingerprint: fingerprint(layer, item),
     layer,
@@ -79,13 +79,34 @@ function normalize(layer, item, center) {
     type: p.type ?? p.subType ?? item.type ?? "event",
     subtype: p.subType,
     location: p.location ?? p.place ?? p.notes ?? item.location,
-    fatalities: number(p.fatalities ?? p.casualties ?? item?._osint_meta?.casualties) ?? 0,
+    fatalities,
+    fatalitiesMin: fatalities,
+    fatalitiesMax: fatalities,
+    variantCount: 1,
     magnitude: number(p.magnitude),
     timestamp: p.timestamp ?? p.date ?? p.occurredAt ?? p.last_updated,
     source: p.source ?? item.source,
     sourceUrl: p.source_url ?? p.url ?? item.source_url,
     summary: p.event_summary ?? p.notes ?? item.event_summary,
   };
+}
+
+function consolidateEvents(events) {
+  const consolidated = new Map();
+  for (const event of events) {
+    const existing = consolidated.get(event.fingerprint);
+    if (!existing) {
+      consolidated.set(event.fingerprint, event);
+      continue;
+    }
+    existing.fatalitiesMin = Math.min(existing.fatalitiesMin, event.fatalitiesMin);
+    existing.fatalitiesMax = Math.max(existing.fatalitiesMax, event.fatalitiesMax);
+    existing.fatalities = existing.fatalitiesMax;
+    existing.variantCount += 1;
+    if (!existing.sourceUrl && event.sourceUrl) existing.sourceUrl = event.sourceUrl;
+    if (!existing.source && event.source) existing.source = event.source;
+  }
+  return [...consolidated.values()];
 }
 
 function isAviation(layer) {
@@ -105,7 +126,7 @@ function matchesTrigger(event, triggers = {}) {
 export function evaluateMonitor(config, snapshots, previous = {}, now = Date.now()) {
   const center = { lat: Number(config.center.lat), lon: Number(config.center.lon) };
   const radiusKm = Number(config.radiusKm ?? 50);
-  const current = [];
+  const collected = [];
   const feeds = [];
 
   for (const layer of config.layers ?? []) {
@@ -117,10 +138,11 @@ export function evaluateMonitor(config, snapshots, previous = {}, now = Date.now
     const events = unwrapItems(result.data)
       .map((item) => normalize(layer, item, center))
       .filter((event) => event && event.distanceKm <= radiusKm);
-    current.push(...events);
+    collected.push(...events);
     feeds.push({ layer, ok: true, count: events.length, fetchedAt: result.data?.fetchedAt });
   }
 
+  const current = consolidateEvents(collected);
   const baseline = !previous.initialized;
   const seen = previous.seen ?? {};
   const unseen = current.filter((event) => !seen[event.fingerprint]);

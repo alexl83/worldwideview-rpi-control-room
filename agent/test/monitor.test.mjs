@@ -63,3 +63,25 @@ test("volatile collector IDs do not turn the same report into a new event", () =
   );
   assert.equal(result.triggered.length, 0);
 });
+
+test("conflicting casualty estimates are consolidated into one range", () => {
+  const variants = { "conflict-events": { ok: true, data: { items: [
+    {
+      id: "gdelt-1785616831987-35.7000-51.4000-0",
+      latitude: 35.7,
+      longitude: 51.4,
+      properties: { type: "Battles", date: "2026-08-01T20:30:00Z", notes: "Tehran", fatalities: 11 },
+    },
+    {
+      id: "gdelt-1785616831987-35.7000-51.4000-1",
+      latitude: 35.7,
+      longitude: 51.4,
+      properties: { type: "Battles", date: "2026-08-01T20:30:00Z", notes: "Tehran", fatalities: 13 },
+    },
+  ] } } };
+  const result = evaluateMonitor({ ...config, layers: ["conflict-events"] }, variants, {}, 1_000);
+  assert.equal(result.current.length, 1);
+  assert.equal(result.current[0].fatalitiesMin, 11);
+  assert.equal(result.current[0].fatalitiesMax, 13);
+  assert.equal(result.current[0].variantCount, 2);
+});

@@ -146,6 +146,8 @@ function monitorPrompt(monitor, result) {
 Usa esclusivamente i dati JSON forniti: non aggiungere fatti, non fare altre query e non presentare assenza
 nel feed come assenza reale. Includi: titolo con gravità, luogo e raggio, novità rilevanti ordinate per
 importanza, distanza, fonte/link quando presente, stato dei feed, limiti e confidenza. Massimo 1200 caratteri.
+Se fatalitiesMin e fatalitiesMax differiscono, presentali come intervallo dichiarato e non sommarli.
+variantCount indica quanti record sono stati consolidati nello stesso evento.
 
 Monitor:
 ${JSON.stringify({ id: monitor.id, name: monitor.name, center: monitor.center, radiusKm: monitor.radiusKm })}
