@@ -58,7 +58,9 @@ Install Caddy, copy `caddy/Caddyfile` to `/etc/caddy/Caddyfile`, and restart it.
 The browser entry point becomes `https://porpolino.local`; the data engine is
 proxied below `/engine`. Export Caddy's root certificate from
 `/var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt` and trust it
-once on every client. Keep ports 3000 and 5000 bound to `127.0.0.1`.
+once on every client. Keep ports 3000 and 5000 bound to `127.0.0.1`. Both
+`NEXTAUTH_URL` and `BETTER_AUTH_URL` must use the external HTTPS origin (without
+the old `:3000` port), otherwise authenticated plugin API calls are rejected.
 
 For frontend chat, generate one long random `WWV_AGENT_SOCKET_TOKEN` and place
 the same value in `/etc/wwv-agent.env` and `/etc/worldwideview.env`. The Compose
