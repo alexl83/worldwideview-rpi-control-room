@@ -37,6 +37,7 @@ remain in root-owned environment files on the Pi.
 - `systemd/`: hardened, boot-enabled service templates.
 - `config/`: secret-free configuration examples and Codex/WWV agent guidance.
 - `patches/`: upstream issues and the fixes used by this deployment.
+- `seeders/`: local data adapters missing from the stock self-hosted engine.
 
 ## Prerequisites
 
@@ -47,6 +48,9 @@ sudo-capable operator account.
 The WorldWideView source and the data-engine image are intentionally not
 vendored. Clone/build those upstream projects separately, then use this repo as
 the deployment and control plane.
+
+The local Aviation seeder supplies the OpenSky endpoint expected by the official
+frontend plugin, which is absent from the stock self-hosted seeder set.
 
 ## Quick start
 

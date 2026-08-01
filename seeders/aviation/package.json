@@ -1,0 +1,7 @@
+{
+  "name": "@local/wwv-seeder-aviation",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.mjs"
+}
