@@ -1,0 +1,12 @@
+{
+  "name": "wwv-headless-session",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "puppeteer-core": "^24.16.0"
+  }
+}

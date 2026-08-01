@@ -1,0 +1,249 @@
+import fs from "node:fs";
+import path from "node:path";
+import process from "node:process";
+import { spawn } from "node:child_process";
+import makeWASocket, {
+  DisconnectReason,
+  fetchLatestBaileysVersion,
+  useMultiFileAuthState,
+} from "@whiskeysockets/baileys";
+import pino from "pino";
+import QRCode from "qrcode";
+import qrcode from "qrcode-terminal";
+
+const mode = process.argv[2] ?? "run";
+const stateDir = process.env.WWV_AGENT_STATE_DIR ?? "/var/lib/wwv-agent";
+const authDir = path.join(stateDir, "whatsapp-auth");
+const sessionsFile = path.join(stateDir, "sessions.json");
+const workspace = process.env.WWV_AGENT_WORKSPACE ?? "/srv/worldwideview";
+const maxChars = Number(process.env.WWV_AGENT_MAX_MESSAGE_CHARS ?? 12000);
+const timeoutMs = Number(process.env.WWV_AGENT_TIMEOUT_MS ?? 600000);
+const model = process.env.WWV_AGENT_MODEL?.trim();
+const allowed = new Set(
+  (process.env.WWV_AGENT_ALLOWED_NUMBERS ?? "")
+    .split(",")
+    .map(normalizeNumber)
+    .filter(Boolean),
+);
+const logger = pino({ level: process.env.LOG_LEVEL ?? "info" });
+const active = new Set();
+
+function normalizeNumber(value) {
+  return String(value ?? "").replace(/[^0-9]/g, "");
+}
+
+function loadSessions() {
+  try {
+    return JSON.parse(fs.readFileSync(sessionsFile, "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+function saveSessions(sessions) {
+  fs.mkdirSync(stateDir, { recursive: true, mode: 0o700 });
+  const tmp = `${sessionsFile}.tmp`;
+  fs.writeFileSync(tmp, `${JSON.stringify(sessions, null, 2)}\n`, { mode: 0o600 });
+  fs.renameSync(tmp, sessionsFile);
+}
+
+function messageText(message) {
+  const content = message?.message;
+  if (!content) return "";
+  return (
+    content.conversation ??
+    content.extendedTextMessage?.text ??
+    content.imageMessage?.caption ??
+    content.videoMessage?.caption ??
+    ""
+  ).trim();
+}
+
+function splitText(text) {
+  const result = [];
+  let rest = text.trim();
+  while (rest.length > maxChars) {
+    let cut = rest.lastIndexOf("\n", maxChars);
+    if (cut < maxChars / 2) cut = maxChars;
+    result.push(rest.slice(0, cut));
+    rest = rest.slice(cut).trimStart();
+  }
+  if (rest) result.push(rest);
+  return result.length ? result : ["Nessuna risposta prodotta."];
+}
+
+function codexArgs(threadId, prompt) {
+  const common = ["--json", "--skip-git-repo-check"];
+  if (model) common.push("--model", model);
+  if (threadId) return ["exec", "resume", ...common, threadId, prompt];
+  return [
+    "exec",
+    ...common,
+    "--sandbox",
+    "read-only",
+    "--cd",
+    workspace,
+    prompt,
+  ];
+}
+
+async function runCodex(threadId, prompt) {
+  return await new Promise((resolve, reject) => {
+    const child = spawn("codex", codexArgs(threadId, prompt), {
+      cwd: workspace,
+      env: process.env,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let buffer = "";
+    let stderr = "";
+    let newThreadId = threadId;
+    let finalText = "";
+    const timer = setTimeout(() => {
+      child.kill("SIGINT");
+      reject(new Error(`Codex non ha concluso entro ${timeoutMs / 1000}s`));
+    }, timeoutMs);
+
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      buffer += chunk;
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const event = JSON.parse(line);
+          if (event.type === "thread.started") newThreadId = event.thread_id;
+          if (event.type === "item.completed" && event.item?.type === "agent_message") {
+            finalText = event.item.text ?? finalText;
+          }
+        } catch (error) {
+          logger.warn({ error, line }, "invalid Codex JSONL event");
+        }
+      }
+    });
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk) => { stderr += chunk; });
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      if (code === 0) resolve({ threadId: newThreadId, text: finalText });
+      else reject(new Error(stderr.trim() || `Codex terminato con codice ${code}`));
+    });
+  });
+}
+
+async function handleMessage(sock, msg) {
+  const jid = msg.key.remoteJid;
+  if (!jid || jid.endsWith("@g.us") || msg.key.fromMe) return;
+  // Recent WhatsApp accounts may use an opaque LID as remoteJid. Baileys
+  // exposes the corresponding phone-number JID in one of the *Alt fields.
+  const senderJid = msg.key.remoteJidAlt ?? msg.key.participantAlt ?? msg.key.participant ?? jid;
+  const sender = normalizeNumber(senderJid.split("@")[0]);
+  const remoteIdentity = normalizeNumber(jid.split("@")[0]);
+  if (!allowed.has(sender) && !allowed.has(remoteIdentity)) {
+    logger.warn({ sender, jid, senderJid }, "blocked WhatsApp sender");
+    return;
+  }
+  const text = messageText(msg);
+  if (!text) return;
+  if (active.has(jid)) {
+    await sock.sendMessage(jid, { text: "Sto già elaborando una richiesta. Riprova quando ho concluso." });
+    return;
+  }
+
+  const sessions = loadSessions();
+  if (text === "/new") {
+    delete sessions[jid];
+    saveSessions(sessions);
+    await sock.sendMessage(jid, { text: "Nuova sessione Codex pronta." });
+    return;
+  }
+  if (text === "/status") {
+    await sock.sendMessage(jid, {
+      text: `Relay attivo. Sessione: ${sessions[jid]?.threadId ?? "nuova"}. Sandbox: read-only.`,
+    });
+    return;
+  }
+  if (text === "/help") {
+    await sock.sendMessage(jid, { text: "Comandi: /status, /new, /help. Ogni altro messaggio viene inviato a Codex." });
+    return;
+  }
+
+  active.add(jid);
+  await sock.sendMessage(jid, { react: { text: "⏳", key: msg.key } });
+  try {
+    const result = await runCodex(sessions[jid]?.threadId, text);
+    if (result.threadId) {
+      sessions[jid] = { threadId: result.threadId, updatedAt: new Date().toISOString() };
+      saveSessions(sessions);
+    }
+    for (const chunk of splitText(result.text)) await sock.sendMessage(jid, { text: chunk });
+    await sock.sendMessage(jid, { react: { text: "✅", key: msg.key } });
+  } catch (error) {
+    logger.error({ error, jid }, "Codex turn failed");
+    await sock.sendMessage(jid, { text: `Errore Codex: ${error.message}` });
+    await sock.sendMessage(jid, { react: { text: "❌", key: msg.key } });
+  } finally {
+    active.delete(jid);
+  }
+}
+
+async function connect() {
+  fs.mkdirSync(authDir, { recursive: true, mode: 0o700 });
+  const { state, saveCreds } = await useMultiFileAuthState(authDir);
+  const { version } = await fetchLatestBaileysVersion();
+  const sock = makeWASocket({
+    version,
+    auth: state,
+    logger: logger.child({ component: "baileys" }),
+    printQRInTerminal: false,
+    markOnlineOnConnect: false,
+    syncFullHistory: false,
+  });
+
+  sock.ev.on("creds.update", saveCreds);
+  sock.ev.on("connection.update", async ({ connection, lastDisconnect, qr }) => {
+    if (qr) {
+      const qrPath = path.join(stateDir, "whatsapp-pairing.png");
+      await QRCode.toFile(qrPath, qr, {
+        type: "png",
+        width: 1024,
+        margin: 4,
+        errorCorrectionLevel: "M",
+      });
+      fs.chmodSync(qrPath, 0o600);
+      logger.info({ qrPath }, "WhatsApp pairing PNG written");
+      process.stdout.write("Scansiona il QR da WhatsApp > Dispositivi collegati:\n");
+      qrcode.generate(qr, { small: true });
+    }
+    if (connection === "open") logger.info("WhatsApp connected");
+    if (connection === "close") {
+      const status = lastDisconnect?.error?.output?.statusCode;
+      if (status === DisconnectReason.loggedOut) {
+        logger.error("WhatsApp logged out; run wwv-agent login again");
+        process.exit(1);
+      }
+      logger.warn({ status }, "WhatsApp disconnected; reconnecting");
+      setTimeout(() => connect().catch((error) => logger.error({ error }, "reconnect failed")), 3000);
+    }
+  });
+  if (mode === "run") {
+    sock.ev.on("messages.upsert", ({ messages, type }) => {
+      if (type !== "notify") return;
+      for (const msg of messages) handleMessage(sock, msg).catch((error) => logger.error({ error }, "message handler failed"));
+    });
+  }
+}
+
+if (mode === "status") {
+  const authExists = fs.existsSync(path.join(authDir, "creds.json"));
+  console.log(JSON.stringify({ authExists, allowedNumbers: allowed.size, workspace, sessions: Object.keys(loadSessions()).length }, null, 2));
+  process.exit(authExists ? 0 : 1);
+}
+
+if (!fs.existsSync(workspace)) throw new Error(`Workspace inesistente: ${workspace}`);
+if (mode === "run" && allowed.size === 0) throw new Error("WWV_AGENT_ALLOWED_NUMBERS è vuoto: avvio negato");
+await connect();

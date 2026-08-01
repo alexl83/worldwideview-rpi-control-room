@@ -1,0 +1,19 @@
+# Upstream fixes used by this deployment
+
+The deployment exposed several independent upstream bugs. Each linked issue
+contains the corresponding patch as a proposed solution:
+
+- [WWV #387](https://github.com/silvertakana/worldwideview/issues/387): server-side
+  MCP ignored the configured data-engine URL and always contacted localhost.
+- [wwv-data-engine #24](https://github.com/silvertakana/wwv-data-engine/issues/24):
+  manifest IDs came from seeder folder names instead of canonical live snapshot IDs.
+- [WWV #388](https://github.com/silvertakana/worldwideview/issues/388): indexed-map
+  and nested snapshot shapes crashed code that assumed arrays and called `.reduce`.
+- [WWV #389](https://github.com/silvertakana/worldwideview/issues/389): Dockerfile
+  layer order invalidated the expensive standalone copy on application changes.
+- [WWV #390](https://github.com/silvertakana/worldwideview/issues/390): cached root
+  app shells could leave command-bus clients on stale builds after deployment.
+
+Apply or port these fixes in the WWV/data-engine checkout before building. The
+issues are the canonical patch records so this control-plane repository does not
+silently fork either upstream project.

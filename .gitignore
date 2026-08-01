@@ -1,0 +1,12 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+node_modules/
+auth/
+profile/
+*.log
+*.png
+*.jpg
+.idea/
+.vscode/

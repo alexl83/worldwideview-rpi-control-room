@@ -1,0 +1,3 @@
+# Merge into the service user's ~/.codex/config.toml.
+[mcp_servers.worldwideview]
+url = "http://127.0.0.1:3000/api/mcp"

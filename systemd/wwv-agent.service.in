@@ -1,0 +1,29 @@
+[Unit]
+Description=WorldWideView WhatsApp Codex relay
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@WWV_USER@
+Group=@WWV_USER@
+WorkingDirectory=/opt/wwv-agent
+Environment=HOME=@WWV_HOME@
+EnvironmentFile=/etc/wwv-agent.env
+ExecStart=/usr/bin/node /opt/wwv-agent/src/relay.mjs run
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/lib/wwv-agent @WWV_HOME@/.codex
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

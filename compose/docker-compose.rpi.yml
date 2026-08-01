@@ -1,0 +1,90 @@
+services:
+  wwv:
+    image: ${WWV_IMAGE:-worldwideview-wwv:latest}
+    ports:
+      - "${WWV_BIND:-0.0.0.0}:3000:3000"
+    volumes:
+      - wwv-data:/app/data
+      - ${WWV_PLUGINS_DIR:-/srv/worldwideview/public/plugins-local}:/app/public/plugins-local:ro
+    env_file:
+      - /etc/worldwideview.env
+    environment:
+      DATABASE_URL: postgresql://worldwideview:${POSTGRES_PASSWORD}@db:5432/worldwideview?schema=public
+      REDIS_URL: redis://redis:6379
+      NEXT_PUBLIC_WWV_PLUGIN_DATA_ENGINE_URL: http://wwv-data-engine:5000
+      WWV_PLUGIN_DATA_ENGINE_URL: http://wwv-data-engine:5000
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      wwv-data-engine:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    restart: unless-stopped
+
+  wwv-data-engine:
+    image: ${WWV_ENGINE_IMAGE:-wwv-data-engine:arm64}
+    ports:
+      - "${WWV_ENGINE_BIND:-0.0.0.0}:5000:5000"
+    volumes:
+      - engine-seeders:/app/seeders
+      - engine-data:/app/data
+    environment:
+      PORT: "5000"
+      REDIS_URL: redis://redis:6379
+      SEEDERS_DIR: /app/seeders
+      DB_PATH: /app/data/engine.db
+      DOWNLOAD_SEEDERS: "true"
+      # Safe only when port 5000 is restricted to a trusted LAN/VPN.
+      WWV_SKIP_WS_AUTH: "true"
+      NODE_ENV: production
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:5000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 120s
+    restart: unless-stopped
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: worldwideview
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: worldwideview
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U worldwideview -d worldwideview"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+volumes:
+  wwv-data:
+  postgres-data:
+  redis-data:
+  engine-seeders:
+  engine-data:
