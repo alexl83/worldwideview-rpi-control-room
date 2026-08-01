@@ -14,6 +14,8 @@ if [[ -z "$SERVICE_USER" ]] || ! id "$SERVICE_USER" >/dev/null 2>&1; then
 fi
 readonly SERVICE_HOME="$(getent passwd "$SERVICE_USER" | cut -d: -f6)"
 
+"$REPO_DIR/scripts/install-voice-rpi.sh"
+
 install -d -o "$SERVICE_USER" -g "$SERVICE_USER" /opt/wwv-agent /opt/wwv-headless
 install -d -m 0700 -o "$SERVICE_USER" -g "$SERVICE_USER" \
   /var/lib/wwv-agent /var/lib/wwv-browser

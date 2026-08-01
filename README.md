@@ -28,7 +28,9 @@ remain in root-owned environment files on the Pi.
 
 ## What is included
 
-- `agent/`: allow-listed WhatsApp Web relay with one native Codex thread per chat.
+- `agent/`: allow-listed WhatsApp Web relay with one native Codex thread per chat,
+  plus fully local Italian speech recognition and synthesis. Voice notes receive
+  the complete text answer followed by audio; written queries remain text-only.
 - automatic geofenced monitoring with silent baseline, deduplication and cooldown.
 - authenticated frontend chat pinned to the originating WWV browser tab.
 - `headless/`: persistent Chromium session controlled by the WWV command bus.

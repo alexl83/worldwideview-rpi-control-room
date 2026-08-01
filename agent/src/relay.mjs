@@ -12,6 +12,7 @@ import pino from "pino";
 import QRCode from "qrcode";
 import qrcode from "qrcode-terminal";
 import { MonitorRuntime } from "./monitor.mjs";
+import { VoiceRuntime, audioMessage } from "./voice.mjs";
 
 const mode = process.argv[2] ?? "run";
 const stateDir = process.env.WWV_AGENT_STATE_DIR ?? "/var/lib/wwv-agent";
@@ -27,13 +28,24 @@ const workspace = process.env.WWV_AGENT_WORKSPACE ?? "/srv/worldwideview";
 const maxChars = Number(process.env.WWV_AGENT_MAX_MESSAGE_CHARS ?? 12000);
 const timeoutMs = Number(process.env.WWV_AGENT_TIMEOUT_MS ?? 600000);
 const model = process.env.WWV_AGENT_MODEL?.trim();
+const logger = pino({ level: process.env.LOG_LEVEL ?? "info" });
+const voiceRuntime = new VoiceRuntime({
+  logger,
+  whisperPath: process.env.WWV_AGENT_WHISPER_PATH ?? "/opt/wwv-voice/whisper/whisper-cli",
+  whisperModel: process.env.WWV_AGENT_WHISPER_MODEL ?? "/opt/wwv-voice/models/ggml-base.bin",
+  piperPython: process.env.WWV_AGENT_PIPER_PYTHON ?? "/opt/wwv-voice/piper/bin/python3",
+  piperModel: process.env.WWV_AGENT_PIPER_MODEL ?? "/opt/wwv-voice/models/it_IT-paola-medium.onnx",
+  ffmpegPath: process.env.WWV_AGENT_FFMPEG_PATH ?? "/usr/bin/ffmpeg",
+  maxInputBytes: Number(process.env.WWV_AGENT_VOICE_MAX_BYTES ?? 12 * 1024 * 1024),
+  maxDurationSeconds: Number(process.env.WWV_AGENT_VOICE_MAX_SECONDS ?? 180),
+  maxSpeechChars: Number(process.env.WWV_AGENT_VOICE_MAX_SPEECH_CHARS ?? 4000),
+});
 const allowed = new Set(
   (process.env.WWV_AGENT_ALLOWED_NUMBERS ?? "")
     .split(",")
     .map(normalizeNumber)
     .filter(Boolean),
 );
-const logger = pino({ level: process.env.LOG_LEVEL ?? "info" });
 const active = new Set();
 let monitorRuntime;
 let monitorTimer;
@@ -303,14 +315,17 @@ async function handleMessage(sock, msg) {
     logger.warn({ sender, jid, senderJid }, "blocked WhatsApp sender");
     return;
   }
-  const text = messageText(msg);
-  if (!text) return;
+  const voice = Boolean(audioMessage(msg));
+  let text = messageText(msg);
+  if (!text && !voice) return;
   if (active.has(jid)) {
     await sock.sendMessage(jid, { text: "Sto già elaborando una richiesta. Riprova quando ho concluso." });
     return;
   }
 
   const sessions = loadSessions();
+  // Slash commands are deliberately text-only: a voice note is always treated
+  // as a natural-language Codex request, even if its transcript starts with "/".
   if (text === "/new") {
     delete sessions[jid];
     saveSessions(sessions);
@@ -319,7 +334,7 @@ async function handleMessage(sock, msg) {
   }
   if (text === "/status") {
     await sock.sendMessage(jid, {
-      text: `Relay attivo. Sessione: ${sessions[jid]?.threadId ?? "nuova"}. Globo: headless ${headlessSessionId.slice(0, 8)}. Sandbox: read-only. Monitor: ${monitorRuntime?.list().filter((item) => item.enabled).length ?? 0} attivi.`,
+      text: `Relay attivo. Sessione: ${sessions[jid]?.threadId ?? "nuova"}. Globo: headless ${headlessSessionId.slice(0, 8)}. Sandbox: read-only. Voce: attiva. Monitor: ${monitorRuntime?.list().filter((item) => item.enabled).length ?? 0} attivi.`,
     });
     return;
   }
@@ -356,6 +371,11 @@ async function handleMessage(sock, msg) {
   active.add(jid);
   await sock.sendMessage(jid, { react: { text: "⏳", key: msg.key } });
   try {
+    if (voice) {
+      text = await voiceRuntime.transcribe(msg, sock);
+      logger.info({ jid, transcriptChars: text.length }, "WhatsApp voice note transcribed");
+      await sock.sendMessage(jid, { text: `🎙️ Ho capito: “${text}”` });
+    }
     const pinnedPrompt = [
       `Questa richiesta WhatsApp è rigidamente vincolata alla sessione WorldWideView headless ${headlessSessionId}.`,
       "Usa e controlla esclusivamente tale sessione. Non scegliere né manovrare sessioni browser interattive.",
@@ -369,6 +389,21 @@ async function handleMessage(sock, msg) {
       saveSessions(sessions);
     }
     for (const chunk of splitText(result.text)) await sock.sendMessage(jid, { text: chunk });
+    if (voice) {
+      try {
+        const audio = await voiceRuntime.synthesize(result.text);
+        await sock.sendMessage(jid, {
+          audio,
+          mimetype: "audio/ogg; codecs=opus",
+          ptt: true,
+        });
+      } catch (error) {
+        // The full text has already been delivered, so a TTS failure never
+        // suppresses or replaces the actual answer.
+        logger.error({ error, jid }, "voice reply synthesis failed");
+        await sock.sendMessage(jid, { text: `Risposta vocale non disponibile: ${error.message}` });
+      }
+    }
     await sock.sendMessage(jid, { react: { text: "✅", key: msg.key } });
   } catch (error) {
     logger.error({ error, jid }, "Codex turn failed");
@@ -460,5 +495,6 @@ if (mode === "status") {
 if (!fs.existsSync(workspace)) throw new Error(`Workspace inesistente: ${workspace}`);
 if (mode === "run" && allowed.size === 0) throw new Error("WWV_AGENT_ALLOWED_NUMBERS è vuoto: avvio negato");
 if (mode === "run" && !isUuid(headlessSessionId)) throw new Error("WWV_AGENT_HEADLESS_SESSION_ID deve essere un UUID valido");
+if (mode === "run") voiceRuntime.validate();
 if (mode === "run") startFrontendServer();
 await connect();

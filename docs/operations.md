@@ -65,6 +65,13 @@ UUID used by `WWV_HEADLESS_SESSION_ID` in `/etc/wwv-headless.env`. Every
 WhatsApp turn is pinned server-side to that session; interactive frontend chats
 remain pinned to their originating browser tab.
 
+The installer also provisions the ARM64 Whisper and Piper runtimes under
+`/opt/wwv-voice`. An incoming WhatsApp voice note is normalized locally, then
+transcribed in Italian. The relay first shows the recognized sentence, always
+sends the complete text answer, and finally adds an Opus voice note. Written
+queries never trigger speech synthesis. Audio input is limited by the
+`WWV_AGENT_VOICE_MAX_SECONDS` and `WWV_AGENT_VOICE_MAX_BYTES` settings.
+
 ## Cross-build and deploy
 
 Run the deploy script from the Mac. `WWV_SOURCE_DIR` must point to the upstream WWV
@@ -106,6 +113,11 @@ curl -fsS http://127.0.0.1:5000/health
 Send `/status` through WhatsApp to verify relay reachability. For a functional
 test, ask the agent to move to a named city, enable a known populated layer and
 then re-read both camera and layer state.
+
+For voice validation, send the same request as a WhatsApp voice note and verify
+the three outputs in order: recognized sentence, complete text response, audio
+response. Speech recognition and synthesis are fully local; only the resulting
+prompt follows the normal Codex path.
 
 Monitor commands:
 
