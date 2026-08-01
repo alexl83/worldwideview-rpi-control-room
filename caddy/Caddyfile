@@ -2,6 +2,11 @@
 # internal CA; clients must trust the exported root CA once.
 porpolino.local {
 	tls internal
+	# Compatibility route for Aviation releases that reduce the configured
+	# engine URL to the page origin before appending /api/aviation.
+	handle /api/aviation* {
+		reverse_proxy 127.0.0.1:5000
+	}
 
 	handle_path /engine/* {
 		reverse_proxy 127.0.0.1:5000
