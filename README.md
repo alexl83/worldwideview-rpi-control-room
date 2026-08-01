@@ -35,6 +35,7 @@ remain in root-owned environment files on the Pi.
 - authenticated frontend chat pinned to the originating WWV browser tab.
 - `headless/`: persistent Chromium session controlled by the WWV command bus.
 - `compose/`: Pi deployment for WWV, its data engine, PostgreSQL and Redis.
+- `caddy/`: local HTTPS gateway and private-CA configuration for browser media APIs.
 - `scripts/`: Pi installer plus ARM64 cross-build/deploy with automatic rollback.
 - `systemd/`: hardened, boot-enabled service templates.
 - `config/`: secret-free configuration examples and Codex/WWV agent guidance.

@@ -1,0 +1,13 @@
+# Local HTTPS entry point. Caddy owns and renews the leaf certificate using its
+# internal CA; clients must trust the exported root CA once.
+porpolino.local {
+	tls internal
+
+	handle_path /engine/* {
+		reverse_proxy 127.0.0.1:5000
+	}
+
+	handle {
+		reverse_proxy 127.0.0.1:3000
+	}
+}

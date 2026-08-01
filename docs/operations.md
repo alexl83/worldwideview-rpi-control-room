@@ -54,6 +54,12 @@ After pairing:
 sudo systemctl enable --now wwv-headless-browser wwv-agent
 ```
 
+Install Caddy, copy `caddy/Caddyfile` to `/etc/caddy/Caddyfile`, and restart it.
+The browser entry point becomes `https://porpolino.local`; the data engine is
+proxied below `/engine`. Export Caddy's root certificate from
+`/var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt` and trust it
+once on every client. Keep ports 3000 and 5000 bound to `127.0.0.1`.
+
 For frontend chat, generate one long random `WWV_AGENT_SOCKET_TOKEN` and place
 the same value in `/etc/wwv-agent.env` and `/etc/worldwideview.env`. The Compose
 file mounts `/run/wwv-agent` into the WWV container. Requests remain bound to the
@@ -83,6 +89,9 @@ TARGET=your-pi.local \
 PUBLIC_ENGINE_URL=http://your-pi.local:5000 \
 /path/to/worldwideview-rpi-control-room/scripts/build-deploy-arm64.sh
 ```
+
+For the Caddy configuration in this repository, build with
+`PUBLIC_ENGINE_URL=https://porpolino.local/engine`.
 
 Use `--sync-from-pi` only if the Pi checkout is the source of truth. It deliberately
 excludes dependencies and build artifacts.
