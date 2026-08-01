@@ -107,3 +107,14 @@ number and understand the account-risk trade-off.
 The pipeline is running on a Raspberry Pi 5 (ARM64) with automatic boot, health
 checks, persistent browser control and deploy rollback. Signal transport is not
 implemented in this repository.
+
+## License
+
+Copyright © 2026 Alex Lannocca.
+
+This project is free software licensed under the GNU General Public License,
+version 3 or (at your option) any later version (`GPL-3.0-or-later`). See
+[LICENSE](LICENSE) for the complete terms.
+
+Versions previously published under the MIT License remain available under the
+terms granted with those versions.
