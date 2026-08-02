@@ -1,6 +1,6 @@
 # Local HTTPS entry point. Caddy owns and renews the leaf certificate using its
 # internal CA; clients must trust the exported root CA once.
-porpolino.local {
+porpolino.local, porpolino.cambogio.corp {
 	tls internal
 	# Compatibility route for Aviation releases that reduce the configured
 	# engine URL to the page origin before appending /api/aviation.

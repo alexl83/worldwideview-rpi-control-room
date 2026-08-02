@@ -69,12 +69,17 @@ sudo systemctl enable --now wwv-headless-browser wwv-agent
 ```
 
 Install Caddy, copy `caddy/Caddyfile` to `/etc/caddy/Caddyfile`, and restart it.
-The browser entry point becomes `https://porpolino.local`; the data engine is
-proxied below `/engine`. Export Caddy's root certificate from
+The supplied site has the LAN and ZeroTier names `https://porpolino.local` and
+`https://porpolino.cambogio.corp`; Caddy issues an internal leaf certificate valid
+for each requested SNI name under the same private CA. The data engine is proxied
+below `/engine`. Export Caddy's root certificate from
 `/var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt` and trust it
 once on every client. Keep ports 3000 and 5000 bound to `127.0.0.1`. Both
 `NEXTAUTH_URL` and `BETTER_AUTH_URL` must use the external HTTPS origin (without
 the old `:3000` port), otherwise authenticated plugin API calls are rejected.
+Add both HTTPS origins to `BETTER_AUTH_TRUSTED_ORIGINS`. The same Caddy root CA
+must be trusted on every device connecting through ZeroTier; changing the DNS SAN
+does not require a new CA installation when that root is already trusted.
 The supplied Caddyfile also exposes `127.0.0.1:3080/mcp/headless`. Do not change
 that listener to `0.0.0.0`: it exists only so Codex can reach a session-pinned MCP
 endpoint without putting the UUID in its URL query string.
