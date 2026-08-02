@@ -111,3 +111,19 @@ test("sourced GDELT mentions retain provenance but never synthetic fatalities", 
   assert.equal(result.current[0].verification, "unverified_keyword_mention");
   assert.equal(result.triggered.length, 0);
 });
+
+test("unverified GDELT mentions do not trigger new-event alerts by default", () => {
+  const sourced = { "conflict-events": { ok: true, data: { items: [{
+    id: "gdelt-stable",
+    latitude: 35.7,
+    longitude: 51.4,
+    source_url: "https://example.invalid/report",
+    verification: "unverified_keyword_mention",
+    type: "Battles",
+  }] } } };
+  const localConfig = { ...config, layers: ["conflict-events"], triggers: { newEvents: true } };
+  const baseline = evaluateMonitor(localConfig, { "conflict-events": { ok: true, data: { items: [] } } }, {}, 1_000);
+  const result = evaluateMonitor(localConfig, sourced, baseline.nextState, 2_000);
+  assert.equal(result.current.length, 1);
+  assert.equal(result.triggered.length, 0);
+});

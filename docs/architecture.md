@@ -40,13 +40,17 @@ by a stable fingerprint and compared with retained state. The first run is a
 silent baseline. A notification requires both a deterministic trigger and an
 expired cooldown; Codex only writes the final concise analysis.
 
-The `conflict-events` upstream seeder currently maps broad GDELT keyword matches
-to conflict categories, emits volatile collector IDs and may generate casualty
-counts with `Math.random()`. The relay therefore rejects unsourced GDELT conflict
-mentions. If a future record includes provenance, it remains explicitly
-`unverified_keyword_mention`; its supplied casualty count is retained only as
-`fatalitiesReported`, while the triggerable/quoted fatality value is forced to
-zero. This is a safety boundary, not ordinary deduplication.
+The local `conflict-events` seeder reads GDELT Event Database 2.0 exports instead
+of treating GKG keyword/location mentions as incidents. It admits only CAMEO
+material-conflict roots 18–20, retains the official event ID and source URL, and
+does not fabricate casualty figures. Because these records remain machine-coded
+news reports, monitors exclude them from automatic triggers by default while
+keeping them available for sourced analysis.
+
+The OpenSky collector persists its last successful snapshot in the engine data
+volume. OAuth2 is used when configured; anonymous collection is throttled to a
+safe daily-credit budget. Cached aircraft are explicitly marked stale with their
+source age, so an upstream 429 cannot silently become either a 404 or “live” data.
 
 ## HTTPS and plugin compatibility
 

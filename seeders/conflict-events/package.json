@@ -1,0 +1,8 @@
+{
+  "name": "@local/wwv-seeder-conflict-events",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "license": "GPL-3.0-or-later",
+  "main": "dist/index.mjs"
+}

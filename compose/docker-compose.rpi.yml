@@ -42,7 +42,12 @@ services:
       REDIS_URL: redis://redis:6379
       SEEDERS_DIR: /app/seeders
       DB_PATH: /app/data/engine.db
-      DOWNLOAD_SEEDERS: "true"
+      OPENSKY_CLIENT_ID: ${OPENSKY_CLIENT_ID:-}
+      OPENSKY_CLIENT_SECRET: ${OPENSKY_CLIENT_SECRET:-}
+      OPENSKY_CACHE_PATH: /app/data/aviation-last-good.json
+      # Seeders are provisioned by the deployment so local audited fixes are
+      # not overwritten at every engine restart.
+      DOWNLOAD_SEEDERS: "false"
       # Safe only when port 5000 is restricted to a trusted LAN/VPN.
       WWV_SKIP_WS_AUTH: "true"
       NODE_ENV: production

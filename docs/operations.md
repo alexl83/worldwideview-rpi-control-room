@@ -207,12 +207,22 @@ deterministic trigger fires.
 
 Automatic alert safety rules:
 
-- unsourced GDELT `conflict-events` records are discarded;
-- volatile `gdelt-<fetch time>-...` IDs cannot create repeated alerts;
-- sourced GDELT keyword mentions cannot use upstream synthetic fatalities;
+- `conflict-events` comes from the 15-minute GDELT Event 2.0 export, restricted
+  to material-conflict CAMEO roots 18–20;
+- GDELT's stable event ID and source URL are retained and casualty counts are
+  never inferred because the Event export does not contain them;
+- machine-coded GDELT reports remain visible for analysis but cannot emit an
+  automatic alert unless `includeUnverifiedMentions` is explicitly enabled;
 - missing records mean “no feed data”, never proof that no real activity exists;
 - source links, confidence limitations and consolidated variants must be exposed
   in the generated briefing.
+
+The local Aviation collector uses OpenSky OAuth2 client credentials when
+`OPENSKY_CLIENT_ID` and `OPENSKY_CLIENT_SECRET` are present. Without credentials
+it limits global requests to one every 20 minutes, below the anonymous daily
+credit allowance. Rate limits and transient failures return the persisted
+last-good snapshot with `feed_stale`, `feed_age_seconds` and `feed_status`
+metadata instead of turning the layer into a 404.
 
 ## Recovery
 

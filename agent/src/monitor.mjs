@@ -109,7 +109,7 @@ function normalize(layer, item, center) {
     timestamp: p.timestamp ?? p.date ?? p.occurredAt ?? p.last_updated,
     source: p.source ?? item.source,
     sourceUrl: url,
-    verification: gdeltMention ? "unverified_keyword_mention" : "source_report",
+    verification: gdeltMention ? (p.verification ?? "unverified_keyword_mention") : "source_report",
     summary: p.event_summary ?? p.notes ?? item.event_summary,
   };
 }
@@ -137,6 +137,9 @@ function isAviation(layer) {
 }
 
 function matchesTrigger(event, triggers = {}) {
+  if (event.verification !== "source_report" && triggers.includeUnverifiedMentions !== true) {
+    return false;
+  }
   if (triggers.minimumFatalities !== undefined
       && event.fatalities >= Number(triggers.minimumFatalities)) return true;
   if (triggers.minimumMagnitude !== undefined
@@ -173,7 +176,9 @@ export function evaluateMonitor(config, snapshots, previous = {}, now = Date.now
   const increase = current.length - Number(previous.eventCount ?? current.length);
   const increaseThreshold = Number(config.triggers?.eventCountIncrease ?? 0);
   if (!baseline && increaseThreshold > 0 && increase >= increaseThreshold && triggered.length === 0) {
-    triggered = unseen;
+    triggered = unseen.filter((event) => (
+      event.verification === "source_report" || config.triggers?.includeUnverifiedMentions === true
+    ));
   }
 
   const retentionMs = Number(config.seenRetentionHours ?? 168) * 3600_000;
