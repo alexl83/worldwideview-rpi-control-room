@@ -22,6 +22,10 @@ WhatsApp -> Baileys relay -> Codex CLI -> WorldWideView MCP
 Mac/Colima -- ARM64 build -> local registry -- SSH tunnel -> Raspberry Pi
 ```
 
+LAN browsers enter through Caddy at `https://porpolino.local`. The WWV and data
+engine container ports stay on loopback; Caddy proxies the UI, engine stream,
+legacy Aviation API and a loopback-only MCP alias pinned to the headless globe.
+
 No OpenAI API key is required: the service account authenticates the Codex CLI
 with an eligible ChatGPT subscription. WorldWideView and Google Maps credentials
 remain in root-owned environment files on the Pi.
@@ -32,10 +36,19 @@ remain in root-owned environment files on the Pi.
   plus fully local Italian speech recognition and synthesis. Voice notes receive
   the complete text answer followed by audio; written queries remain text-only.
 - automatic geofenced monitoring with silent baseline, deduplication and cooldown.
+- configurable concurrent watch profiles (center, radius, layers, interval,
+  trigger thresholds, retention, recipients and cooldown), including earthquakes.
+- defensive OSINT validation: unsourced GDELT keyword mentions are rejected and
+  synthetic casualty figures can never raise alert severity.
 - authenticated frontend chat pinned to the originating WWV browser tab.
-- `headless/`: persistent Chromium session controlled by the WWV command bus.
+- `headless/`: persistent Chromium session controlled by the WWV command bus,
+  with stable UUID, build refresh and automatic login recovery when its SSE
+  command stream loses authentication.
 - `compose/`: Pi deployment for WWV, its data engine, PostgreSQL and Redis.
-- `caddy/`: local HTTPS gateway and private-CA configuration for browser media APIs.
+- `caddy/`: local HTTPS gateway, private CA, engine compatibility routes and
+  query-free headless MCP alias for Codex CLI.
+- `plugins/aviation/`: same-origin compatibility wrapper that prevents the
+  official Aviation plugin from falling back to an incorrect/cloud engine URL.
 - `scripts/`: Pi installer plus ARM64 cross-build/deploy with automatic rollback.
 - `systemd/`: hardened, boot-enabled service templates.
 - `config/`: secret-free configuration examples and Codex/WWV agent guidance.
@@ -96,11 +109,24 @@ frontend plugin, which is absent from the stock self-hosted seeder set.
 See [docs/operations.md](docs/operations.md) for setup, upgrades, recovery and
 validation. See [docs/architecture.md](docs/architecture.md) for trust boundaries.
 
+## Interaction surfaces
+
+| Surface | Globe session | Input/output |
+| --- | --- | --- |
+| WhatsApp direct chat | Stable headless Pi session | Text; voice notes receive transcript, text and voice reply |
+| WWV local-agent panel | The exact authenticated browser tab that opened it | Text |
+| Automatic monitors | No browser required for detection | WhatsApp alert only after deterministic trigger |
+
+WhatsApp never selects an operator's desktop tab. Frontend chat never falls back
+to the headless session. This deliberate separation prevents a remote request
+from unexpectedly moving a globe open on another computer.
+
 ## Security notes
 
 This is a personal/LAN control room, not an Internet-facing reference
-architecture. Keep ports 3000 and 5000 behind a trusted LAN, VPN or reverse proxy;
-never commit `/etc/*.env`, `.codex`, WhatsApp auth state, Chromium profiles or QR
+architecture. Bind ports 3000 and 5000 to loopback and expose only Caddy to the
+trusted LAN or VPN. Never commit `/etc/*.env`, `.codex`, WhatsApp auth state,
+Chromium profiles or QR
 codes. The relay rejects groups and non-allow-listed numbers and launches Codex in
 read-only mode. Baileys is an unofficial WhatsApp Web client, so use a dedicated
 number and understand the account-risk trade-off.

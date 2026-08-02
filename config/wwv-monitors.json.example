@@ -7,6 +7,7 @@
       "center": { "lat": 35.6892, "lon": 51.389 },
       "radiusKm": 75,
       "layers": [
+        "earthquakes",
         "conflict-events",
         "civil-unrest",
         "iranwarlive",
@@ -16,11 +17,38 @@
       "seenRetentionHours": 168,
       "triggers": {
         "minimumFatalities": 1,
+        "minimumMagnitude": 2.5,
         "aircraftEnteringArea": true,
         "eventCountIncrease": 3
       },
       "notification": {
         "cooldownMinutes": 30
+      }
+    },
+    {
+      "id": "local-safety-watch",
+      "name": "Example 10 km local watch",
+      "enabled": true,
+      "center": { "lat": 45.0, "lon": 9.0 },
+      "radiusKm": 10,
+      "layers": [
+        "earthquakes",
+        "civil-unrest",
+        "wildfire",
+        "conflict-events",
+        "military-aviation"
+      ],
+      "intervalSeconds": 300,
+      "seenRetentionHours": 168,
+      "triggers": {
+        "newEvents": true,
+        "minimumFatalities": 1,
+        "minimumMagnitude": 2.5,
+        "aircraftEnteringArea": true
+      },
+      "notification": {
+        "cooldownMinutes": 30,
+        "recipients": ["15551234567"]
       }
     }
   ]

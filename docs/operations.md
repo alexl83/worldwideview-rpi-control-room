@@ -23,6 +23,20 @@ number. The first successful run is always a silent baseline.
 The service account must be able to read this file; the installer uses ownership
 `root:<service-user>` and mode `0640`.
 
+Supported trigger fields are:
+
+- `newEvents`: notify for any newly fingerprinted event;
+- `minimumFatalities`: notify when a trustworthy record meets the threshold;
+- `minimumMagnitude`: earthquake magnitude threshold;
+- `aircraftEnteringArea`: a newly observed aviation entity entered the radius;
+- `eventCountIncrease`: notify on a sudden increase even when another trigger did
+  not select an individual record.
+
+`seenRetentionHours` controls deduplication retention. `intervalSeconds` is
+clamped to a minimum of 60 seconds. Multiple profiles are checked serially to
+avoid lost state updates. Earthquakes can be included simply by adding the
+`earthquakes` layer and a `minimumMagnitude` trigger.
+
 Authenticate Codex under the same Unix account used by systemd:
 
 ```bash
@@ -61,6 +75,33 @@ proxied below `/engine`. Export Caddy's root certificate from
 once on every client. Keep ports 3000 and 5000 bound to `127.0.0.1`. Both
 `NEXTAUTH_URL` and `BETTER_AUTH_URL` must use the external HTTPS origin (without
 the old `:3000` port), otherwise authenticated plugin API calls are rejected.
+The supplied Caddyfile also exposes `127.0.0.1:3080/mcp/headless`. Do not change
+that listener to `0.0.0.0`: it exists only so Codex can reach a session-pinned MCP
+endpoint without putting the UUID in its URL query string.
+
+## Google Maps and place search
+
+Set both `GOOGLE_MAPS_API_KEY` and `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` in
+`/etc/worldwideview.env`. The public value is compiled into the browser bundle;
+changing it requires a WWV rebuild, while the private value is used by the
+server-side place search routes. Enable Map Tiles API for Photorealistic 3D Tiles
+and Places API (New) for addresses and city search. The fork uses the current
+Places `searchText` and details endpoints rather than the legacy Places service.
+
+Restrict the browser key by the HTTPS origin and the server key by the deployment
+environment where practical. A successful 3D globe does not prove Places is
+enabled: validate search separately through `/api/places/search`. Conversely, a
+working Places response does not prove Map Tiles entitlement. Never put a real
+key in this repository or a screenshot.
+
+## Plugin lifecycle
+
+Plugin enable/disable state is persisted in PostgreSQL. The patched marketplace
+bootstrap loads only rows whose `enabled` flag is true, so a disabled plugin is
+not imported on refresh. Re-enable it from the installed/disabled marketplace
+view or by restoring its enabled state through the authenticated application API;
+do not delete database rows merely to hide a plugin. This prevents disabled or
+incompatible packages such as the ISS plugin from producing bootstrap errors.
 
 For frontend chat, generate one long random `WWV_AGENT_SOCKET_TOKEN` and place
 the same value in `/etc/wwv-agent.env` and `/etc/worldwideview.env`. The Compose
@@ -110,6 +151,19 @@ The stack mounts `/srv/worldwideview/seeders-local` read-only into the engine.
 The repository's `seeders/aviation` adapter supplies the civilian OpenSky feed
 expected by the official Aviation plugin and polls every five minutes.
 
+The official Aviation frontend package may still resolve the wrong engine URL
+behind a reverse proxy. Install the compatibility module at:
+
+```text
+/srv/worldwideview/public/plugins-local/aviation/frontend.mjs
+```
+
+and set the installed Aviation manifest entry to
+`/plugins-local/aviation/frontend.mjs`. The module is provided in
+`plugins/aviation/frontend.mjs`. Restart the WWV container after first mounting a
+new file below `public/`; a running standalone Next.js server may otherwise keep
+returning 404 even though the file is visible inside the container.
+
 ## Health and diagnostics
 
 ```bash
@@ -119,6 +173,8 @@ sudo docker compose --env-file /etc/worldwideview.env \
   -f /srv/worldwideview/docker-compose.rpi.yml ps
 curl -fsS http://127.0.0.1:3000/api/health
 curl -fsS http://127.0.0.1:5000/health
+curl -kfsS https://porpolino.local/api/aviation?lookback=15m >/dev/null
+curl -kfsS https://porpolino.local/plugins-local/aviation/frontend.mjs >/dev/null
 ```
 
 Send `/status` through WhatsApp to verify relay reachability. For a functional
@@ -144,6 +200,15 @@ marking new events as seen.
 Scheduled checks query the data engine directly; Codex is called only after a
 deterministic trigger fires.
 
+Automatic alert safety rules:
+
+- unsourced GDELT `conflict-events` records are discarded;
+- volatile `gdelt-<fetch time>-...` IDs cannot create repeated alerts;
+- sourced GDELT keyword mentions cannot use upstream synthetic fatalities;
+- missing records mean “no feed data”, never proof that no real activity exists;
+- source links, confidence limitations and consolidated variants must be exposed
+  in the generated briefing.
+
 ## Recovery
 
 The deployment script automatically restores `worldwideview-wwv:rollback` when
@@ -157,6 +222,29 @@ sudo docker compose --env-file /etc/worldwideview.env \
 
 If WhatsApp disconnects, stop the relay and run `pair` again. Do not delete the
 state directory unless you intentionally want to unlink the device.
+
+If WhatsApp reports that WWV MCP tools are absent, distinguish the base endpoint
+from the pinned session:
+
+```bash
+systemctl status wwv-agent wwv-headless-browser caddy
+journalctl -u wwv-headless-browser -n 100 --no-pager
+sudo sh -c '. /etc/wwv-agent.env; curl --max-time 3 \
+  -H "Authorization: Bearer $WWV_API_KEY" \
+  -H "Accept: text/event-stream" \
+  http://127.0.0.1:3080/mcp/headless'
+```
+
+A timeout is expected for a healthy SSE connection; an immediate `409 requested
+globe session is not active` is not. The keeper now detects a closed WWV command
+stream and logs in automatically. For manual recovery, stop the headless service,
+move `/var/lib/wwv-browser/profile` to a timestamped backup, create a fresh
+mode-0700 profile owned by the service user, and restart the service.
+
+If Aviation reports 404, test both URLs above. HTTP 200 from the API but 404 from
+the module means the public mount needs a WWV restart. HTTP 200 for both followed
+by a browser error usually means the installed manifest still points to the CDN;
+switch it to the local wrapper and hard-refresh the browser.
 
 ## Disk maintenance
 
@@ -176,3 +264,6 @@ sudo journalctl --vacuum-time=14d
 ```
 
 Do not prune volumes: they contain databases, engine snapshots and WWV state.
+Large source build directories such as Rust `target/` are also safe to clean with
+the language's own command (`cargo clean`) only after confirming the running
+service uses an installed binary rather than that build-tree executable.

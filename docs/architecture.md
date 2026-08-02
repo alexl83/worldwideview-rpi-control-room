@@ -9,6 +9,12 @@
 5. A systemd-managed Chromium session provides an always-on fallback viewport.
 6. The WWV server reads normalized snapshots from the separate data engine.
 
+WhatsApp MCP traffic uses the loopback-only Caddy alias
+`http://127.0.0.1:3080/mcp/headless`. Caddy attaches the stable headless session
+UUID while Codex sees a query-free URL. This works around a Codex streamable-HTTP
+transport failure observed with `?sessionId=...`, without allowing session
+selection or exposing port 3080 beyond the Pi.
+
 The browser is part of the execution model: WWV's command bus controls a live
 globe session, not a server-side virtual camera. Keeping Chromium on the Pi removes
 the dependency on an operator laptop while preserving this model.
@@ -19,6 +25,37 @@ session belongs to the logged-in user and the MCP URL is pinned to it for the
 entire Codex turn. Resources, plugin tools and globe commands cannot fall back to
 the persistent headless session. The socket request is authenticated with the
 shared `WWV_AGENT_SOCKET_TOKEN` stored in both root-owned environment files.
+
+The keeper stores the stable UUID in browser `sessionStorage` before WWV loads.
+It watches the WWV command bridge: when the authenticated SSE stream closes, it
+navigates to login, authenticates with the dedicated account and reopens the
+globe. Build-ID changes also cause a controlled reload. The profile remains under
+`/var/lib/wwv-browser` and is never shared with an interactive browser.
+
+## Monitoring path and data quality
+
+Scheduled monitors read engine snapshots directly; they do not need Chromium or
+MCP. Each layer is normalized, filtered by great-circle distance, consolidated
+by a stable fingerprint and compared with retained state. The first run is a
+silent baseline. A notification requires both a deterministic trigger and an
+expired cooldown; Codex only writes the final concise analysis.
+
+The `conflict-events` upstream seeder currently maps broad GDELT keyword matches
+to conflict categories, emits volatile collector IDs and may generate casualty
+counts with `Math.random()`. The relay therefore rejects unsourced GDELT conflict
+mentions. If a future record includes provenance, it remains explicitly
+`unverified_keyword_mention`; its supplied casualty count is retained only as
+`fatalitiesReported`, while the triggerable/quoted fatality value is forced to
+zero. This is a safety boundary, not ordinary deduplication.
+
+## HTTPS and plugin compatibility
+
+Caddy is the only LAN-facing application endpoint. `/engine/*` proxies the data
+engine and `/api/aviation*` supports Aviation releases that append their API path
+to the page origin. The local Aviation wrapper goes one step further and fetches
+same-origin `/api/aviation` while reusing the official plugin's rendering and
+entity mapping. Disabled marketplace plugins are excluded during bootstrap by
+the patched WWV image, preventing removed plugins such as ISS from being imported.
 
 ## Build and deployment path
 
@@ -41,6 +78,7 @@ shipping full image tarballs after every small source change.
 | Codex OAuth session | service user's `~/.codex` | Never |
 | WhatsApp linked-device keys | `/var/lib/wwv-agent` | Never |
 | Chromium cookies/profile | `/var/lib/wwv-browser` | Never |
+| Monitor fingerprints/cooldowns | `/var/lib/wwv-agent/monitor-state.json` | Never |
 | PostgreSQL/Redis/engine data | Docker named volumes | Never |
 
 The example files contain placeholders only. Keep environment files mode `0600`
@@ -48,7 +86,7 @@ and state directories mode `0700`.
 
 ## Network boundary
 
-The example Compose file publishes ports 3000 and 5000 because LAN browsers need
-the WWV UI and data stream. Bind them to a private interface, restrict them with a
-firewall, or place the stack behind a VPN. `WWV_SKIP_WS_AUTH=true` must not be used
-on an Internet-exposed data engine.
+The example Compose file permits configurable binds, but the recommended Caddy
+deployment sets both `WWV_BIND` and `WWV_ENGINE_BIND` to `127.0.0.1`. Only ports
+80/443 should face the trusted LAN. Port 3080 is explicitly bound to Pi loopback.
+`WWV_SKIP_WS_AUTH=true` must never accompany an Internet-exposed engine.
