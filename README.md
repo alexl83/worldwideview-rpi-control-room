@@ -38,8 +38,8 @@ remain in root-owned environment files on the Pi.
 - automatic geofenced monitoring with silent baseline, deduplication and cooldown.
 - configurable concurrent watch profiles (center, radius, layers, interval,
   trigger thresholds, retention, recipients and cooldown), including earthquakes.
-- defensive OSINT validation: unsourced GDELT keyword mentions are rejected and
-  synthetic casualty figures can never raise alert severity.
+- sourced GDELT Event 2.0 ingestion with stable IDs, CAMEO classification and no
+  synthetic casualty figures; machine-coded reports are non-alerting by default.
 - authenticated frontend chat pinned to the originating WWV browser tab.
 - `headless/`: persistent Chromium session controlled by the WWV command bus,
   with stable UUID, build refresh and automatic login recovery when its SSE
@@ -66,7 +66,11 @@ vendored. Clone/build those upstream projects separately, then use this repo as
 the deployment and control plane.
 
 The local Aviation seeder supplies the OpenSky endpoint expected by the official
-frontend plugin, which is absent from the stock self-hosted seeder set.
+frontend plugin, which is absent from the stock self-hosted seeder set. Anonymous
+access works with a conservative 20-minute polling cadence and persisted fallback
+data. For five-minute live polling, create an OpenSky account and API client, then
+set `OPENSKY_CLIENT_ID` and `OPENSKY_CLIENT_SECRET` in
+`/etc/worldwideview.env`; an OpenSky username/password is not used by the API.
 
 ## Quick start
 

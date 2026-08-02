@@ -79,11 +79,9 @@ function normalize(layer, item, center) {
   const p = properties(item);
   const url = sourceUrl(item, p);
   const gdeltMention = isGdeltConflictMention(layer, item, p);
-  // The upstream conflict-events seeder currently turns keyword matches from
-  // GDELT into events, generates random casualty counts and omits provenance
-  // from the live snapshot. Such records must never generate operational
-  // alerts. If provenance is added later, keep the mention but discard its
-  // synthetic casualty figure and label it explicitly as unverified.
+  // GDELT rows are machine-coded source reports, not independently verified
+  // incidents. Legacy unsourced rows are rejected; sourced rows remain useful
+  // for analysis but cannot contribute casualties or alert by default.
   if (gdeltMention && !url) return null;
   const reportedFatalities = number(
     p.fatalities ?? p.casualties ?? item?._osint_meta?.casualties,

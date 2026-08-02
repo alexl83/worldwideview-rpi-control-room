@@ -18,8 +18,10 @@ interactive responses and automatic notifications.
 Monitor normalization supports array and indexed-map snapshots, latitude/longitude
 aliases, great-circle radii, stable URL fingerprints, volatile collector-ID
 deduplication, duplicate casualty ranges and atomic serialized state writes.
-Unsourced GDELT conflict mentions are dropped because upstream currently
-classifies keyword matches as events and generates random casualty counts.
+The local conflict seeder consumes GDELT Event 2.0 instead of GKG keyword
+mentions, preserves stable event IDs and source URLs, and never supplies invented
+casualty counts. Its machine-coded reports remain visible to analysis but do not
+trigger automatic alerts unless `includeUnverifiedMentions` is explicitly set.
 
 Authenticated WWV frontend chat reaches the relay over a Unix socket. Its Codex
 thread key includes both authenticated user ID and tab session UUID, and every
