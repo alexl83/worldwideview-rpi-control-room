@@ -46,6 +46,11 @@ material-conflict roots 18–20, retains the official event ID and source URL, a
 does not fabricate casualty figures. Because these records remain machine-coded
 news reports, monitors exclude them from automatic triggers by default while
 keeping them available for sourced analysis.
+Before the engine starts, a one-shot Compose service refreshes the official
+seeder bundle and removes only its unsafe `conflictEvents` package. The audited
+replacement is then loaded from the read-only local-seeder mount. This preserves
+automatic updates for every other upstream collector and is reproducible with a
+fresh Docker volume.
 
 The OpenSky collector persists its last successful snapshot in the engine data
 volume. OAuth2 is used when configured; anonymous collection is throttled to a

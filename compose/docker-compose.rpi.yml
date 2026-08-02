@@ -1,4 +1,16 @@
 services:
+  wwv-seeders-init:
+    image: ${WWV_ENGINE_IMAGE:-wwv-data-engine:arm64}
+    volumes:
+      - engine-seeders:/app/seeders
+    command:
+      - sh
+      - -c
+      - >-
+        node /app/dist/scripts/download-seeders.js &&
+        rm -rf /app/seeders/community/conflictEvents
+    restart: "no"
+
   wwv:
     image: ${WWV_IMAGE:-worldwideview-wwv:latest}
     ports:
@@ -54,6 +66,8 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      wwv-seeders-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:5000/health || exit 1"]
       interval: 10s
