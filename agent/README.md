@@ -30,6 +30,15 @@ WhatsApp voice notes are decoded and transcribed locally with Whisper. The relay
 sends the transcript, always sends the full text answer, and then synthesizes an
 Italian Opus reply with Piper. Written prompts never produce unsolicited audio.
 
+Baileys message retries are fully supported. Every outbound protobuf payload is
+kept for seven days (maximum 1,000 messages) in
+`/var/lib/wwv-agent/whatsapp-outbound-messages.json`; `getMessage` serves it when
+WhatsApp asks the linked device to retransmit a message that another device could
+not decrypt. A process-wide retry counter limits attempts to five, and a socket
+generation guard prevents overlapping reconnect loops. The cache is mode `0600`
+and contains message content, so treat it with the same sensitivity as WhatsApp
+linked-device state.
+
 Commands sent through WhatsApp: `/help`, `/status`, `/new`, `/monitors`,
 `/monitor <id> on|off`, and `/brief <id>`.
 

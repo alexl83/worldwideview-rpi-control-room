@@ -6,8 +6,10 @@ import { spawn } from "node:child_process";
 import makeWASocket, {
   DisconnectReason,
   fetchLatestBaileysVersion,
+  proto,
   useMultiFileAuthState,
 } from "@whiskeysockets/baileys";
+import NodeCache from "node-cache";
 import pino from "pino";
 import QRCode from "qrcode";
 import qrcode from "qrcode-terminal";
@@ -18,6 +20,7 @@ const mode = process.argv[2] ?? "run";
 const stateDir = process.env.WWV_AGENT_STATE_DIR ?? "/var/lib/wwv-agent";
 const authDir = path.join(stateDir, "whatsapp-auth");
 const sessionsFile = path.join(stateDir, "sessions.json");
+const outboundMessagesFile = path.join(stateDir, "whatsapp-outbound-messages.json");
 const monitorsFile = process.env.WWV_AGENT_MONITORS_FILE ?? "/etc/wwv-monitors.json";
 const monitorStateFile = path.join(stateDir, "monitor-state.json");
 const engineUrl = process.env.WWV_AGENT_ENGINE_URL ?? "http://127.0.0.1:5000";
@@ -49,6 +52,9 @@ const allowed = new Set(
 const active = new Set();
 let monitorRuntime;
 let monitorTimer;
+let reconnectTimer;
+let socketGeneration = 0;
+const msgRetryCounterCache = new NodeCache({ stdTTL: 3600, useClones: false });
 
 function normalizeNumber(value) {
   return String(value ?? "").replace(/[^0-9]/g, "");
@@ -71,6 +77,55 @@ function saveSessions(sessions) {
   const tmp = `${sessionsFile}.tmp`;
   fs.writeFileSync(tmp, `${JSON.stringify(sessions, null, 2)}\n`, { mode: 0o600 });
   fs.renameSync(tmp, sessionsFile);
+}
+
+function loadOutboundMessages() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(outboundMessagesFile, "utf8"));
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+let outboundMessages = loadOutboundMessages();
+
+function outboundKey(key) {
+  return key?.remoteJid && key?.id ? `${key.remoteJid}:${key.id}` : "";
+}
+
+function saveOutboundMessages() {
+  const now = Date.now();
+  const retentionMs = 7 * 24 * 3600_000;
+  const retained = Object.entries(outboundMessages)
+    .filter(([, entry]) => now - Number(entry?.savedAt ?? 0) < retentionMs)
+    .sort(([, a], [, b]) => Number(b.savedAt) - Number(a.savedAt))
+    .slice(0, 1000);
+  outboundMessages = Object.fromEntries(retained);
+  fs.mkdirSync(stateDir, { recursive: true, mode: 0o700 });
+  const temporary = `${outboundMessagesFile}.tmp`;
+  fs.writeFileSync(temporary, `${JSON.stringify(outboundMessages)}\n`, { mode: 0o600 });
+  fs.renameSync(temporary, outboundMessagesFile);
+}
+
+function rememberOutboundMessage(sent) {
+  const key = outboundKey(sent?.key);
+  if (!key || !sent?.message) return;
+  outboundMessages[key] = {
+    savedAt: Date.now(),
+    protobuf: Buffer.from(proto.Message.encode(sent.message).finish()).toString("base64"),
+  };
+  saveOutboundMessages();
+}
+
+async function getOutboundMessage(key) {
+  const entry = outboundMessages[outboundKey(key)];
+  if (!entry?.protobuf) {
+    logger.warn({ messageId: key?.id, remoteJid: key?.remoteJid }, "WhatsApp retry requested for uncached message");
+    return undefined;
+  }
+  logger.info({ messageId: key.id, remoteJid: key.remoteJid }, "serving cached WhatsApp message retry");
+  return proto.Message.decode(Buffer.from(entry.protobuf, "base64"));
 }
 
 function messageText(message) {
@@ -419,6 +474,7 @@ async function handleMessage(sock, msg) {
 }
 
 async function connect() {
+  const generation = ++socketGeneration;
   fs.mkdirSync(authDir, { recursive: true, mode: 0o700 });
   const { state, saveCreds } = await useMultiFileAuthState(authDir);
   const { version } = await fetchLatestBaileysVersion();
@@ -429,7 +485,17 @@ async function connect() {
     printQRInTerminal: false,
     markOnlineOnConnect: false,
     syncFullHistory: false,
+    msgRetryCounterCache,
+    maxMsgRetryCount: 5,
+    getMessage: getOutboundMessage,
   });
+
+  const sendMessage = sock.sendMessage.bind(sock);
+  sock.sendMessage = async (...args) => {
+    const sent = await sendMessage(...args);
+    rememberOutboundMessage(sent);
+    return sent;
+  };
 
   sock.ev.on("creds.update", saveCreds);
   sock.ev.on("connection.update", async ({ connection, lastDisconnect, qr }) => {
@@ -447,6 +513,10 @@ async function connect() {
       qrcode.generate(qr, { small: true });
     }
     if (connection === "open") {
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = undefined;
+      }
       logger.info("WhatsApp connected");
       if (!monitorRuntime) {
         try {
@@ -473,13 +543,19 @@ async function connect() {
       }
     }
     if (connection === "close") {
+      if (generation !== socketGeneration) return;
       const status = lastDisconnect?.error?.output?.statusCode;
       if (status === DisconnectReason.loggedOut) {
         logger.error("WhatsApp logged out; run wwv-agent login again");
         process.exit(1);
       }
       logger.warn({ status }, "WhatsApp disconnected; reconnecting");
-      setTimeout(() => connect().catch((error) => logger.error({ error }, "reconnect failed")), 3000);
+      if (!reconnectTimer) {
+        reconnectTimer = setTimeout(() => {
+          reconnectTimer = undefined;
+          connect().catch((error) => logger.error({ error }, "reconnect failed"));
+        }, 3000);
+      }
     }
   });
   if (mode === "run") {

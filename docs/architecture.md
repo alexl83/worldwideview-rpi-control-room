@@ -77,6 +77,7 @@ shipping full image tarballs after every small source change.
 | Sender allow-list | `/etc/wwv-agent.env` | Never |
 | Codex OAuth session | service user's `~/.codex` | Never |
 | WhatsApp linked-device keys | `/var/lib/wwv-agent` | Never |
+| WhatsApp outbound retry cache | `/var/lib/wwv-agent/whatsapp-outbound-messages.json` | Never |
 | Chromium cookies/profile | `/var/lib/wwv-browser` | Never |
 | Monitor fingerprints/cooldowns | `/var/lib/wwv-agent/monitor-state.json` | Never |
 | PostgreSQL/Redis/engine data | Docker named volumes | Never |

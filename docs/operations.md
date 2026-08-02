@@ -228,6 +228,22 @@ sudo docker compose --env-file /etc/worldwideview.env \
 If WhatsApp disconnects, stop the relay and run `pair` again. Do not delete the
 state directory unless you intentionally want to unlink the device.
 
+If WhatsApp displays “Waiting for this message”, inspect the relay for closed
+Signal sessions and retry requests:
+
+```bash
+journalctl -u wwv-agent --since '24 hours ago' --no-pager | \
+  grep -E 'closed session|Closing session|cached WhatsApp message retry|uncached message'
+```
+
+The relay implements Baileys `getMessage`, a persistent outbound protobuf cache,
+a five-attempt retry limit and serialized reconnects. This lets WhatsApp request
+the original message payload and re-encrypt it after a key-ratchet mismatch. Keep
+`whatsapp-outbound-messages.json` mode `0600`; it contains recent message content.
+Re-pair only if WhatsApp reports a logout or placeholders persist after both
+devices have been online. Back up `whatsapp-auth` before pairing and never run two
+relay processes against the same linked-device directory.
+
 If WhatsApp reports that WWV MCP tools are absent, distinguish the base endpoint
 from the pinned session:
 
