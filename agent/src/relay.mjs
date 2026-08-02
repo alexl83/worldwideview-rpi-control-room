@@ -257,6 +257,8 @@ nel feed come assenza reale. Includi: titolo con gravità, luogo e raggio, novit
 importanza, distanza, fonte/link quando presente, stato dei feed, limiti e confidenza. Massimo 1200 caratteri.
 Se fatalitiesMin e fatalitiesMax differiscono, presentali come intervallo dichiarato e non sommarli.
 variantCount indica quanti record sono stati consolidati nello stesso evento.
+Non assegnare gravità alta a record con verification diversa da "source_report". fatalitiesReported
+è solo il valore non verificato ricevuto dal feed e non deve essere presentato come vittime reali.
 
 Monitor:
 ${JSON.stringify({ id: monitor.id, name: monitor.name, center: monitor.center, radiusKm: monitor.radiusKm })}

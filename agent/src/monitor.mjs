@@ -42,11 +42,20 @@ function properties(item) {
   return item?.properties && typeof item.properties === "object" ? item.properties : item;
 }
 
+function sourceUrl(item, p = properties(item)) {
+  return p?.source_url ?? p?.sourceUrl ?? p?.url ?? item?.source_url ?? item?.sourceUrl;
+}
+
+function isGdeltConflictMention(layer, item, p = properties(item)) {
+  const id = item?.id ?? item?.event_id ?? p?.id ?? p?.event_id;
+  return layer === "conflict-events" && /^gdelt-/i.test(String(id ?? ""));
+}
+
 function fingerprint(layer, item) {
   const p = properties(item);
-  const sourceUrl = p?.source_url ?? p?.url ?? item?.source_url;
-  if (sourceUrl) {
-    return `${layer}:url:${crypto.createHash("sha256").update(String(sourceUrl)).digest("hex").slice(0, 24)}`;
+  const url = sourceUrl(item, p);
+  if (url) {
+    return `${layer}:url:${crypto.createHash("sha256").update(String(url)).digest("hex").slice(0, 24)}`;
   }
   const explicit = item?.id ?? item?.event_id ?? item?.hex ?? p?.id ?? p?.event_id ?? p?.hex;
   const volatileId = /^(gdelt|IRW-[^-]+)-\d{10,}-/i.test(String(explicit ?? ""));
@@ -68,7 +77,18 @@ function normalize(layer, item, center) {
   const point = coordinates(item);
   if (!point) return null;
   const p = properties(item);
-  const fatalities = number(p.fatalities ?? p.casualties ?? item?._osint_meta?.casualties) ?? 0;
+  const url = sourceUrl(item, p);
+  const gdeltMention = isGdeltConflictMention(layer, item, p);
+  // The upstream conflict-events seeder currently turns keyword matches from
+  // GDELT into events, generates random casualty counts and omits provenance
+  // from the live snapshot. Such records must never generate operational
+  // alerts. If provenance is added later, keep the mention but discard its
+  // synthetic casualty figure and label it explicitly as unverified.
+  if (gdeltMention && !url) return null;
+  const reportedFatalities = number(
+    p.fatalities ?? p.casualties ?? item?._osint_meta?.casualties,
+  ) ?? 0;
+  const fatalities = gdeltMention ? 0 : reportedFatalities;
   return {
     fingerprint: fingerprint(layer, item),
     layer,
@@ -82,11 +102,14 @@ function normalize(layer, item, center) {
     fatalities,
     fatalitiesMin: fatalities,
     fatalitiesMax: fatalities,
+    fatalitiesReported: gdeltMention ? reportedFatalities : undefined,
+    fatalitiesVerified: !gdeltMention,
     variantCount: 1,
     magnitude: number(p.magnitude),
     timestamp: p.timestamp ?? p.date ?? p.occurredAt ?? p.last_updated,
     source: p.source ?? item.source,
-    sourceUrl: p.source_url ?? p.url ?? item.source_url,
+    sourceUrl: url,
+    verification: gdeltMention ? "unverified_keyword_mention" : "source_report",
     summary: p.event_summary ?? p.notes ?? item.event_summary,
   };
 }

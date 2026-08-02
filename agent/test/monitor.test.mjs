@@ -64,7 +64,7 @@ test("volatile collector IDs do not turn the same report into a new event", () =
   assert.equal(result.triggered.length, 0);
 });
 
-test("conflicting casualty estimates are consolidated into one range", () => {
+test("unsourced GDELT conflict mentions with synthetic casualties are rejected", () => {
   const variants = { "conflict-events": { ok: true, data: { items: [
     {
       id: "gdelt-1785616831987-35.7000-51.4000-0",
@@ -80,8 +80,34 @@ test("conflicting casualty estimates are consolidated into one range", () => {
     },
   ] } } };
   const result = evaluateMonitor({ ...config, layers: ["conflict-events"] }, variants, {}, 1_000);
+  assert.equal(result.current.length, 0);
+  assert.equal(result.triggered.length, 0);
+});
+
+test("sourced GDELT mentions retain provenance but never synthetic fatalities", () => {
+  const sourced = { "conflict-events": { ok: true, data: { items: [{
+    id: "gdelt-1785616831987-45.4667-9.2000-0",
+    latitude: 45.4667,
+    longitude: 9.2,
+    source_url: "https://example.invalid/report-1",
+    properties: {
+      type: "Battles",
+      date: "2026-08-01T20:30:00Z",
+      notes: "Milan, Lombardia, Italy",
+      fatalities: 14,
+    },
+  }] } } };
+  const localConfig = {
+    center: { lat: 45.55, lon: 9.16667 },
+    radiusKm: 10,
+    layers: ["conflict-events"],
+    triggers: { minimumFatalities: 1 },
+  };
+  const result = evaluateMonitor(localConfig, sourced, {}, 1_000);
   assert.equal(result.current.length, 1);
-  assert.equal(result.current[0].fatalitiesMin, 11);
-  assert.equal(result.current[0].fatalitiesMax, 13);
-  assert.equal(result.current[0].variantCount, 2);
+  assert.equal(result.current[0].fatalities, 0);
+  assert.equal(result.current[0].fatalitiesReported, 14);
+  assert.equal(result.current[0].fatalitiesVerified, false);
+  assert.equal(result.current[0].verification, "unverified_keyword_mention");
+  assert.equal(result.triggered.length, 0);
 });
