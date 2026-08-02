@@ -102,7 +102,9 @@ function codexArgs(threadId, prompt, { sessionId } = {}) {
   const common = ["--json", "--skip-git-repo-check"];
   if (model) common.push("--model", model);
   if (sessionId) {
-    const url = `http://127.0.0.1:3000/api/mcp?sessionId=${encodeURIComponent(sessionId)}`;
+    const url = sessionId === headlessSessionId
+      ? "http://127.0.0.1:3080/mcp/headless"
+      : `http://127.0.0.1:3000/api/mcp?sessionId=${encodeURIComponent(sessionId)}`;
     common.push("--config", `mcp_servers.worldwideview.url=${JSON.stringify(url)}`);
   }
   if (threadId) return ["exec", "resume", ...common, threadId, prompt];

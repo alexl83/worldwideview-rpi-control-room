@@ -16,3 +16,13 @@ porpolino.local {
 		reverse_proxy 127.0.0.1:3000
 	}
 }
+
+# Codex CLI's streamable-HTTP transport currently mishandles an MCP URL whose
+# query string pins a WWV browser session. Expose a loopback-only, query-free
+# alias and attach the immutable headless session ID at the proxy boundary.
+http://127.0.0.1:3080 {
+	handle /mcp/headless {
+		rewrite * /api/mcp?sessionId=00000000-0000-4000-8000-000000000001
+		reverse_proxy 127.0.0.1:3000
+	}
+}

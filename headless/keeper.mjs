@@ -12,6 +12,7 @@ let browser;
 let page;
 let loadedBuildId = "";
 let healthCheckRunning = false;
+let sessionStreamClosed = false;
 
 function log(message, details = {}) {
   console.log(JSON.stringify({ time: new Date().toISOString(), message, ...details }));
@@ -35,6 +36,17 @@ async function loginIfNeeded() {
     throw new Error(`WWV headless login failed: ${diagnostic}`);
   }
   log("authenticated");
+}
+
+async function reauthenticate() {
+  log("browser session expired; reauthenticating");
+  await page.goto(`${baseUrl}/login`, {
+    waitUntil: "domcontentloaded",
+    timeout: 60_000,
+  });
+  await loginIfNeeded();
+  await openGlobe();
+  sessionStreamClosed = false;
 }
 
 async function currentBuild() {
@@ -93,6 +105,13 @@ async function start() {
   await page.evaluateOnNewDocument((sessionId) => {
     sessionStorage.setItem("wwv-globe-session-id", sessionId);
   }, headlessSessionId);
+  page.on("console", (entry) => {
+    const text = entry.text();
+    if (text.includes("[wwv build]") || text.includes("useGlobeCommandBridge")) {
+      log("browser console", { level: entry.type(), text });
+    }
+    if (text.includes("SSE stream closed")) sessionStreamClosed = true;
+  });
   page.on("pageerror", (error) => log("page error", { error: String(error) }));
   await openGlobe();
 
@@ -102,6 +121,7 @@ async function start() {
     try {
       if (page.isClosed()) throw new Error("page closed");
       if (page.url().includes("/login")) await loginIfNeeded();
+      if (sessionStreamClosed) await reauthenticate();
       const serverBuildId = await currentBuild();
       if (serverBuildId && serverBuildId !== loadedBuildId) {
         log("new build detected", { loadedBuildId, serverBuildId });
