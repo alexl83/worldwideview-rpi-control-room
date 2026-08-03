@@ -261,6 +261,14 @@ the stable WhatsApp message ID, so synthetic identifiers provide equivalent test
 coverage. Before publishing diagnostics, also redact message bodies, authorization
 allowlists and the contents of both `whatsapp-auth` and the outbound cache.
 
+If a receiving device never issues another retry, an administrator can request a
+fresh text send without opening a second Baileys session. Write a mode-`0600` JSON
+file named `/var/lib/wwv-agent/whatsapp-resend-request.json` containing only a
+cached `messageId`, then restart `wwv-agent`. Once WhatsApp connects, the relay
+recovers the text and recipient from either the current or legacy cache format,
+sends it as a new message and deletes the request after success. Media payloads
+are deliberately rejected. Back up `whatsapp-auth` before this operation.
+
 If WhatsApp reports that WWV MCP tools are absent, distinguish the base endpoint
 from the pinned session:
 

@@ -22,6 +22,7 @@ const stateDir = process.env.WWV_AGENT_STATE_DIR ?? "/var/lib/wwv-agent";
 const authDir = path.join(stateDir, "whatsapp-auth");
 const sessionsFile = path.join(stateDir, "sessions.json");
 const outboundMessagesFile = path.join(stateDir, "whatsapp-outbound-messages.json");
+const resendRequestFile = path.join(stateDir, "whatsapp-resend-request.json");
 const monitorsFile = process.env.WWV_AGENT_MONITORS_FILE ?? "/etc/wwv-monitors.json";
 const monitorStateFile = path.join(stateDir, "monitor-state.json");
 const engineUrl = process.env.WWV_AGENT_ENGINE_URL ?? "http://127.0.0.1:5000";
@@ -125,6 +126,27 @@ async function getOutboundMessage(key) {
   }
   logger.info({ messageId: key.id, remoteJid: key.remoteJid }, "serving cached WhatsApp message retry");
   return proto.Message.decode(Buffer.from(entry.protobuf, "base64"));
+}
+
+async function processResendRequest(sock) {
+  if (!fs.existsSync(resendRequestFile)) return;
+  const request = JSON.parse(fs.readFileSync(resendRequestFile, "utf8"));
+  const messageId = String(request?.messageId ?? "").trim();
+  if (!messageId) throw new Error("WhatsApp resend request has no messageId");
+  const entry = findOutboundEntry(outboundMessages, { id: messageId });
+  const suffix = `:${messageId}`;
+  const legacyKey = Object.keys(outboundMessages).find((key) => key.endsWith(suffix));
+  const remoteJid = entry?.remoteJid ?? legacyKey?.slice(0, -suffix.length);
+  if (!entry?.protobuf || !remoteJid) throw new Error(`cached WhatsApp message ${messageId} not found`);
+  const message = proto.Message.decode(Buffer.from(entry.protobuf, "base64"));
+  const text = message.conversation
+    ?? message.extendedTextMessage?.text
+    ?? message.imageMessage?.caption
+    ?? message.videoMessage?.caption;
+  if (!text) throw new Error(`cached WhatsApp message ${messageId} is not text-resendable`);
+  const sent = await sock.sendMessage(remoteJid, { text });
+  fs.unlinkSync(resendRequestFile);
+  logger.info({ originalMessageId: messageId, newMessageId: sent?.key?.id }, "resent cached WhatsApp message");
 }
 
 function messageText(message) {
@@ -517,6 +539,7 @@ async function connect() {
         reconnectTimer = undefined;
       }
       logger.info("WhatsApp connected");
+      processResendRequest(sock).catch((error) => logger.error({ error }, "cached WhatsApp resend failed"));
       if (!monitorRuntime) {
         try {
           fs.accessSync(monitorsFile, fs.constants.R_OK);
