@@ -41,6 +41,13 @@ generation guard prevents overlapping reconnect loops. The cache is mode `0600`
 and contains message content, so treat it with the same sensitivity as WhatsApp
 linked-device state.
 
+Retry lookup is independent of the recipient identifier representation. It first
+matches the exact JID and message ID, then falls back to the stable message ID so
+that a retry arriving through WhatsApp's LID alias can recover a payload originally
+cached under a phone-number JID. LID values are opaque account identifiers: never
+hard-code or commit identifiers observed in production. Automated tests use only
+synthetic JIDs and LIDs; replacing those values does not change retry behaviour.
+
 Commands sent through WhatsApp: `/help`, `/status`, `/new`, `/monitors`,
 `/monitor <id> on|off`, and `/brief <id>`.
 

@@ -254,6 +254,13 @@ Re-pair only if WhatsApp reports a logout or placeholders persist after both
 devices have been online. Back up `whatsapp-auth` before pairing and never run two
 relay processes against the same linked-device directory.
 
+Phone-number JIDs and WhatsApp LIDs are deployment data and can identify an
+account. Keep both out of source control, logs shared publicly and test fixtures.
+The retry implementation does not require a real LID: its alias fallback matches
+the stable WhatsApp message ID, so synthetic identifiers provide equivalent test
+coverage. Before publishing diagnostics, also redact message bodies, authorization
+allowlists and the contents of both `whatsapp-auth` and the outbound cache.
+
 If WhatsApp reports that WWV MCP tools are absent, distinguish the base endpoint
 from the pinned session:
 

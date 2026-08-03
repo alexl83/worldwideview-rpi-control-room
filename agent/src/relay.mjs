@@ -14,6 +14,7 @@ import pino from "pino";
 import QRCode from "qrcode";
 import qrcode from "qrcode-terminal";
 import { MonitorRuntime } from "./monitor.mjs";
+import { findOutboundEntry, outboundKey } from "./outbound-cache.mjs";
 import { VoiceRuntime, audioMessage } from "./voice.mjs";
 
 const mode = process.argv[2] ?? "run";
@@ -90,10 +91,6 @@ function loadOutboundMessages() {
 
 let outboundMessages = loadOutboundMessages();
 
-function outboundKey(key) {
-  return key?.remoteJid && key?.id ? `${key.remoteJid}:${key.id}` : "";
-}
-
 function saveOutboundMessages() {
   const now = Date.now();
   const retentionMs = 7 * 24 * 3600_000;
@@ -113,13 +110,15 @@ function rememberOutboundMessage(sent) {
   if (!key || !sent?.message) return;
   outboundMessages[key] = {
     savedAt: Date.now(),
+    messageId: sent.key.id,
+    remoteJid: sent.key.remoteJid,
     protobuf: Buffer.from(proto.Message.encode(sent.message).finish()).toString("base64"),
   };
   saveOutboundMessages();
 }
 
 async function getOutboundMessage(key) {
-  const entry = outboundMessages[outboundKey(key)];
+  const entry = findOutboundEntry(outboundMessages, key);
   if (!entry?.protobuf) {
     logger.warn({ messageId: key?.id, remoteJid: key?.remoteJid }, "WhatsApp retry requested for uncached message");
     return undefined;
