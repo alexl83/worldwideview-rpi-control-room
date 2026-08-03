@@ -264,10 +264,19 @@ allowlists and the contents of both `whatsapp-auth` and the outbound cache.
 If a receiving device never issues another retry, an administrator can request a
 fresh text send without opening a second Baileys session. Write a mode-`0600` JSON
 file named `/var/lib/wwv-agent/whatsapp-resend-request.json` containing only a
-cached `messageId`, then restart `wwv-agent`. Once WhatsApp connects, the relay
+cached `messageId`, then start `wwv-agent`. Once WhatsApp connects, the relay
 recovers the text and recipient from either the current or legacy cache format,
 sends it as a new message and deletes the request after success. Media payloads
-are deliberately rejected. Back up `whatsapp-auth` before this operation.
+are deliberately rejected.
+
+Always stop `wwv-agent` before copying `whatsapp-auth`: Baileys updates several
+Signal key files independently, so an archive made while the relay is running can
+contain an inconsistent snapshot. The safe order is: stop the service, archive
+the authentication directory, create the resend request atomically with mode
+`0600`, and start the service. Never restore an older authentication snapshot over
+a paired session merely to recover a message; its ratchet state may no longer
+match the phone, causing `Bad MAC` and “Waiting for this message” on all subsequent
+messages. A stale Signal session must be replaced with a clean pairing.
 
 If WhatsApp reports that WWV MCP tools are absent, distinguish the base endpoint
 from the pinned session:
