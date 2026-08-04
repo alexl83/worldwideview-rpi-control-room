@@ -10,6 +10,9 @@ untested.
 
 | Issue | Observed defect | Tested deployment patch |
 |---|---|---|
+| [WWV #374](https://github.com/silvertakana/worldwideview/issues/374) | Docker supplied `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`, while the server-side Places routes read only `GOOGLE_MAPS_API_KEY`, leaving search without credentials. | [`f2affdd2`](https://github.com/alexl83/worldwideview/commit/f2affdd2) adds the compatible environment fallback; [`1951b2ba`](https://github.com/alexl83/worldwideview/commit/1951b2ba) completes the Places API New migration. The issue is closed and now contains the tested implementation reference. |
+| [WWV #376](https://github.com/silvertakana/worldwideview/issues/376) | A registered but unconfigured community seeder could claim a plugin locally and prevent its working cloud fallback. | [`f2affdd2`](https://github.com/alexl83/worldwideview/commit/f2affdd2) adds a tested operator blocklist as a general escape hatch. Capability-aware manifest registration remains the preferred upstream design. |
+| [WWV #385](https://github.com/silvertakana/worldwideview/issues/385) | `crypto.randomUUID()` could be unavailable on an insecure LAN origin and prevent globe session creation. | [`3af1c6e9`](https://github.com/alexl83/worldwideview/commit/3af1c6e9) falls back to an RFC 4122 UUID built with `crypto.getRandomValues()`; HTTPS remains recommended. |
 | [WWV #386](https://github.com/silvertakana/worldwideview/issues/386) | Google Maps key verification required the unavailable Places API Legacy instead of testing the Map Tiles capability WWV actually uses. | [`0b447232`](https://github.com/alexl83/worldwideview/commit/0b447232) validates against the Map Tiles API; [`1951b2ba`](https://github.com/alexl83/worldwideview/commit/1951b2ba) migrates place search to Places API New. |
 | [WWV #387](https://github.com/silvertakana/worldwideview/issues/387) | Server-side MCP queries ignored the configured data-engine URL and forced localhost. | [`5fce8f08`](https://github.com/alexl83/worldwideview/commit/5fce8f08) honors the configured server-side engine URL. |
 | [WWV #388](https://github.com/silvertakana/worldwideview/issues/388) | Indexed-map and nested snapshot shapes reached array-only code and crashed on `.reduce`. | [`0022319e`](https://github.com/alexl83/worldwideview/commit/0022319e) normalizes supported snapshot envelopes before reduction. |
@@ -17,15 +20,12 @@ untested.
 | [WWV #390](https://github.com/silvertakana/worldwideview/issues/390) | Cached root app shells could keep an obsolete command-bus client alive after deployment. | [`4f9a7ae1`](https://github.com/alexl83/worldwideview/commit/4f9a7ae1) prevents stale app-shell caching and exposes build identity for recovery. |
 | [WWV #396](https://github.com/silvertakana/worldwideview/issues/396) | A fixed 500 ms local-engine probe permanently cached transient failure and silently routed plugins to cloud endpoints. | [`2ce24c60`](https://github.com/alexl83/worldwideview/commit/2ce24c60) retries failed discovery with a realistic timeout; [`4388cf78`](https://github.com/alexl83/worldwideview/commit/4388cf78) preserves the proxied local-engine URL. |
 | [WWV #398](https://github.com/silvertakana/worldwideview/issues/398) | Visible Cesium entities could be unselectable when native scene picking returned no tagged WWV primitive. | [`6a22192e`](https://github.com/alexl83/worldwideview/commit/6a22192e) supports promoted glTF IDs; [`5f8059f9`](https://github.com/alexl83/worldwideview/commit/5f8059f9) adds a bounded screen-space fallback and regression tests. |
+| [WWV #409](https://github.com/silvertakana/worldwideview/issues/409) | Plugin enable/disable actions were not persisted and bootstrap re-imported records whose `enabled` flag was false. | [`97119b66`](https://github.com/alexl83/worldwideview/commit/97119b66) persists both actions; [`1fbe8a6c`](https://github.com/alexl83/worldwideview/commit/1fbe8a6c) excludes disabled records during bootstrap. |
 
-Additional WWV fork changes used by this deployment, but not represented as the
-issues above, are:
+The remaining WWV fork extension used by this deployment is not presented as an
+upstream bug:
 
-- [`97119b66`](https://github.com/alexl83/worldwideview/commit/97119b66): persist plugin enable/disable actions;
-- [`1fbe8a6c`](https://github.com/alexl83/worldwideview/commit/1fbe8a6c): exclude disabled plugins during bootstrap, preventing packages such as the incompatible ISS plugin from loading;
-- [`0844ef52`](https://github.com/alexl83/worldwideview/commit/0844ef52): session-pinned, authenticated frontend agent chat;
-- [`3af1c6e9`](https://github.com/alexl83/worldwideview/commit/3af1c6e9): safe globe session IDs on insecure LAN origins;
-- [`f2affdd2`](https://github.com/alexl83/worldwideview/commit/f2affdd2): Places API environment fallback and local-engine blocklist handling.
+- [`0844ef52`](https://github.com/alexl83/worldwideview/commit/0844ef52): session-pinned, authenticated frontend agent chat over the control room's local Unix-socket relay. This is deployment architecture, not a defect in stock WWV.
 
 ## WWV data engine
 
