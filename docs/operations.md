@@ -16,6 +16,14 @@ sudo WWV_USER="$USER" ./scripts/install-rpi.sh
 Review `/etc/wwv-agent.env` and `/etc/wwv-headless.env`. The WhatsApp allow-list is
 comma-separated E.164 digits without `+`, spaces or punctuation.
 
+Baileys does not keep a persistent chat store from which the relay can reliably
+inherit a disappearing-message timer configured in the official client. Set
+`WWV_AGENT_EPHEMERAL_EXPIRATION_SECONDS=86400` to mark every user-visible relay
+text, voice response and automatic monitor alert as expiring after 24 hours.
+Zero disables expiration. Reactions and protocol messages are deliberately left
+untouched. Keep this value aligned with the timer shown by the official client;
+changing the client setting alone does not reconfigure the service.
+
 Edit `/etc/wwv-monitors.json` to define geofenced watches. Each monitor specifies
 its center, radius, data-engine layers, polling interval, triggers and cooldown.
 When `notification.recipients` is omitted, alerts go to the first allow-listed

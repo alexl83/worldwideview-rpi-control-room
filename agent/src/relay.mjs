@@ -16,6 +16,7 @@ import qrcode from "qrcode-terminal";
 import { MonitorRuntime } from "./monitor.mjs";
 import { findOutboundEntry, outboundKey } from "./outbound-cache.mjs";
 import { VoiceRuntime, audioMessage } from "./voice.mjs";
+import { parseEphemeralExpiration, sendOptionsFor } from "./whatsapp-send-options.mjs";
 
 const mode = process.argv[2] ?? "run";
 const stateDir = process.env.WWV_AGENT_STATE_DIR ?? "/var/lib/wwv-agent";
@@ -32,6 +33,9 @@ const headlessSessionId = process.env.WWV_AGENT_HEADLESS_SESSION_ID ?? "";
 const workspace = process.env.WWV_AGENT_WORKSPACE ?? "/srv/worldwideview";
 const maxChars = Number(process.env.WWV_AGENT_MAX_MESSAGE_CHARS ?? 12000);
 const timeoutMs = Number(process.env.WWV_AGENT_TIMEOUT_MS ?? 600000);
+const ephemeralExpiration = parseEphemeralExpiration(
+  process.env.WWV_AGENT_EPHEMERAL_EXPIRATION_SECONDS,
+);
 const model = process.env.WWV_AGENT_MODEL?.trim();
 const logger = pino({ level: process.env.LOG_LEVEL ?? "info" });
 const voiceRuntime = new VoiceRuntime({
@@ -512,8 +516,12 @@ async function connect() {
   });
 
   const sendMessage = sock.sendMessage.bind(sock);
-  sock.sendMessage = async (...args) => {
-    const sent = await sendMessage(...args);
+  sock.sendMessage = async (jid, content, options) => {
+    const sent = await sendMessage(
+      jid,
+      content,
+      sendOptionsFor(content, options, ephemeralExpiration),
+    );
     rememberOutboundMessage(sent);
     return sent;
   };
