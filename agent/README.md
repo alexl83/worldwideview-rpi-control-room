@@ -32,6 +32,14 @@ WhatsApp voice notes are decoded and transcribed locally with Whisper. The relay
 sends the transcript, always sends the full text answer, and then synthesizes an
 Italian Opus reply with Piper. Written prompts never produce unsolicited audio.
 
+User-visible relay messages can carry a configurable WhatsApp disappearing-message
+expiration. Set `WWV_AGENT_EPHEMERAL_EXPIRATION_SECONDS` to the desired lifetime
+in seconds (`0` disables it). This covers interactive text, voice responses and
+monitor alerts, while reactions and protocol messages remain untouched. Baileys
+does not maintain a persistent chat store in this relay, so changing the timer in
+the official WhatsApp client does not automatically update this environment
+variable; operators must keep the two settings aligned and restart `wwv-agent`.
+
 Baileys message retries are fully supported. Every outbound protobuf payload is
 kept for seven days (maximum 1,000 messages) in
 `/var/lib/wwv-agent/whatsapp-outbound-messages.json`; `getMessage` serves it when

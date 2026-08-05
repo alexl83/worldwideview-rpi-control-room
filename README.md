@@ -125,6 +125,12 @@ WhatsApp never selects an operator's desktop tab. Frontend chat never falls back
 to the headless session. This deliberate separation prevents a remote request
 from unexpectedly moving a globe open on another computer.
 
+WhatsApp replies and automatic alerts can be made ephemeral with
+`WWV_AGENT_EPHEMERAL_EXPIRATION_SECONDS`. The relay applies that lifetime to
+every user-visible text and voice message it sends; see
+[`docs/operations.md`](docs/operations.md#whatsapp-disappearing-messages) for
+supported values and the interaction with the official WhatsApp client.
+
 ## Security notes
 
 This is a personal/LAN control room, not an Internet-facing reference
