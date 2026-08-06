@@ -69,3 +69,12 @@ Commands sent through WhatsApp: `/help`, `/status`, `/new`, `/monitors`,
 - `/status` reports relay, headless globe, sandbox, voice and monitor status.
 - `/brief <id>` evaluates current snapshots without notifying or marking events.
 - `/monitor <id> pause` is accepted as an alias for `off`.
+
+## TODO
+
+- [ ] Add secure self-service enrollment for a new WhatsApp identity. An
+  administrator should generate a single-use code with a short expiration; the
+  new contact sends `/pair <code>`, and the relay atomically consumes the code
+  and stores the observed LID as an authorized inbound identity. The workflow
+  must rate-limit attempts, avoid logging the code, keep phone numbers and LIDs
+  out of the repository, and must not add a LID to monitor recipients.
