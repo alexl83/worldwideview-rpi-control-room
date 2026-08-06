@@ -49,8 +49,14 @@ const voiceRuntime = new VoiceRuntime({
   maxDurationSeconds: Number(process.env.WWV_AGENT_VOICE_MAX_SECONDS ?? 180),
   maxSpeechChars: Number(process.env.WWV_AGENT_VOICE_MAX_SPEECH_CHARS ?? 4000),
 });
-const allowed = new Set(
+const allowedNumbers = new Set(
   (process.env.WWV_AGENT_ALLOWED_NUMBERS ?? "")
+    .split(",")
+    .map(normalizeNumber)
+    .filter(Boolean),
+);
+const allowedIdentities = new Set(
+  (process.env.WWV_AGENT_ALLOWED_IDENTITIES ?? "")
     .split(",")
     .map(normalizeNumber)
     .filter(Boolean),
@@ -369,8 +375,8 @@ async function analyzeMonitor(monitor, result) {
 async function notifyMonitor(sock, monitor, text) {
   const configured = monitor.notification?.recipients;
   const recipients = Array.isArray(configured) && configured.length
-    ? configured.map(normalizeNumber).filter((number) => allowed.has(number))
-    : [...allowed].slice(0, 1);
+    ? configured.map(normalizeNumber).filter((number) => allowedNumbers.has(number))
+    : [...allowedNumbers].slice(0, 1);
   for (const number of recipients) {
     for (const chunk of splitText(text)) {
       await sock.sendMessage(`${number}@s.whatsapp.net`, { text: chunk });
@@ -395,7 +401,9 @@ async function handleMessage(sock, msg) {
   const senderJid = msg.key.remoteJidAlt ?? msg.key.participantAlt ?? msg.key.participant ?? jid;
   const sender = normalizeNumber(senderJid.split("@")[0]);
   const remoteIdentity = normalizeNumber(jid.split("@")[0]);
-  if (!allowed.has(sender) && !allowed.has(remoteIdentity)) {
+  const senderAllowed = allowedNumbers.has(sender) || allowedIdentities.has(sender);
+  const remoteIdentityAllowed = allowedNumbers.has(remoteIdentity) || allowedIdentities.has(remoteIdentity);
+  if (!senderAllowed && !remoteIdentityAllowed) {
     logger.warn({ sender, jid, senderJid }, "blocked WhatsApp sender");
     return;
   }
@@ -598,12 +606,18 @@ async function connect() {
 
 if (mode === "status") {
   const authExists = fs.existsSync(path.join(authDir, "creds.json"));
-  console.log(JSON.stringify({ authExists, allowedNumbers: allowed.size, workspace, sessions: Object.keys(loadSessions()).length }, null, 2));
+  console.log(JSON.stringify({
+    authExists,
+    allowedNumbers: allowedNumbers.size,
+    allowedIdentities: allowedIdentities.size,
+    workspace,
+    sessions: Object.keys(loadSessions()).length,
+  }, null, 2));
   process.exit(authExists ? 0 : 1);
 }
 
 if (!fs.existsSync(workspace)) throw new Error(`Workspace inesistente: ${workspace}`);
-if (mode === "run" && allowed.size === 0) throw new Error("WWV_AGENT_ALLOWED_NUMBERS è vuoto: avvio negato");
+if (mode === "run" && allowedNumbers.size === 0) throw new Error("WWV_AGENT_ALLOWED_NUMBERS è vuoto: avvio negato");
 if (mode === "run" && !isUuid(headlessSessionId)) throw new Error("WWV_AGENT_HEADLESS_SESSION_ID deve essere un UUID valido");
 if (mode === "run") voiceRuntime.validate();
 if (mode === "run") startFrontendServer();

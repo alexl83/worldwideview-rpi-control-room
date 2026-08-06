@@ -16,6 +16,14 @@ sudo WWV_USER="$USER" ./scripts/install-rpi.sh
 Review `/etc/wwv-agent.env` and `/etc/wwv-headless.env`. The WhatsApp allow-list is
 comma-separated E.164 digits without `+`, spaces or punctuation.
 
+Keep real telephone numbers in `WWV_AGENT_ALLOWED_NUMBERS`. Some WhatsApp
+accounts arrive from Baileys under an opaque LID and occasionally omit the
+phone-number alias; authorize such an observed identity separately through
+`WWV_AGENT_ALLOWED_IDENTITIES`. LIDs may identify an account and must remain in
+the private environment file, never in this repository. They authorize inbound
+commands only: automatic monitor recipients are selected exclusively from real
+numbers in `WWV_AGENT_ALLOWED_NUMBERS` or from a monitor's explicit recipients.
+
 ### WhatsApp disappearing messages
 
 Baileys does not keep a persistent chat store from which the relay can reliably

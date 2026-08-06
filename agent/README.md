@@ -10,6 +10,12 @@ the WorldwideView MCP entry in the service user's Codex configuration. WhatsApp
 turns are always pinned to the stable headless globe through Caddy's loopback MCP
 alias; they never select or control an operator's interactive tab.
 
+Telephone-number authorization and opaque WhatsApp identity authorization are
+kept separate. `WWV_AGENT_ALLOWED_NUMBERS` contains E.164 phone numbers and is
+also the source for default monitor recipients. `WWV_AGENT_ALLOWED_IDENTITIES`
+contains exceptional LIDs used only to accept inbound messages when Baileys does
+not provide a phone-number alias; LIDs are never notification destinations.
+
 The integrated monitor polls engine snapshots without invoking an LLM, establishes
 a silent first-run baseline, filters events by geodesic radius, deduplicates them,
 and invokes Codex only for a triggered alert. The single relay socket sends both
