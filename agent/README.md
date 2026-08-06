@@ -78,3 +78,13 @@ Commands sent through WhatsApp: `/help`, `/status`, `/new`, `/monitors`,
   and stores the observed LID as an authorized inbound identity. The workflow
   must rate-limit attempts, avoid logging the code, keep phone numbers and LIDs
   out of the repository, and must not add a LID to monitor recipients.
+- [ ] **Optional:** add full WhatsApp group support. Keep group JIDs in a
+  dedicated private allow-list and enroll groups through a short-lived,
+  single-use administrator code. Define per-group member/LID authorization,
+  require an explicit mention or reply by default, support configurable shared
+  versus per-member Codex threads, serialize globe-control requests, quote the
+  triggering message, and preserve voice, disappearing-message and retry
+  behavior. Monitor notifications must use typed phone/group targets so neither
+  a participant LID nor mere group membership can grant control or become an
+  alert destination. Administrative commands must remain restricted to
+  explicitly authorized operators.
