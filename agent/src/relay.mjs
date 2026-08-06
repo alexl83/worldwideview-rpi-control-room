@@ -14,6 +14,7 @@ import pino from "pino";
 import QRCode from "qrcode";
 import qrcode from "qrcode-terminal";
 import { MonitorRuntime } from "./monitor.mjs";
+import { MonitorCommandRuntime } from "./monitor-commands.mjs";
 import { findOutboundEntry, outboundKey } from "./outbound-cache.mjs";
 import { VoiceRuntime, audioMessage } from "./voice.mjs";
 import { parseEphemeralExpiration, sendOptionsFor } from "./whatsapp-send-options.mjs";
@@ -26,6 +27,8 @@ const outboundMessagesFile = path.join(stateDir, "whatsapp-outbound-messages.jso
 const resendRequestFile = path.join(stateDir, "whatsapp-resend-request.json");
 const monitorsFile = process.env.WWV_AGENT_MONITORS_FILE ?? "/etc/wwv-monitors.json";
 const monitorStateFile = path.join(stateDir, "monitor-state.json");
+const managedMonitorsFile = path.join(stateDir, "managed-monitors.json");
+const monitorCommandsFile = path.join(stateDir, "monitor-commands.json");
 const engineUrl = process.env.WWV_AGENT_ENGINE_URL ?? "http://127.0.0.1:5000";
 const frontendSocket = process.env.WWV_AGENT_FRONTEND_SOCKET ?? "/run/wwv-agent/chat.sock";
 const frontendToken = process.env.WWV_AGENT_SOCKET_TOKEN ?? "";
@@ -61,8 +64,21 @@ const allowedIdentities = new Set(
     .map(normalizeNumber)
     .filter(Boolean),
 );
+const adminNumbers = new Set(
+  (process.env.WWV_AGENT_ADMIN_NUMBERS ?? [...allowedNumbers][0] ?? "")
+    .split(",")
+    .map(normalizeNumber)
+    .filter(Boolean),
+);
+const adminIdentities = new Set(
+  (process.env.WWV_AGENT_ADMIN_IDENTITIES ?? "")
+    .split(",")
+    .map(normalizeNumber)
+    .filter(Boolean),
+);
 const active = new Set();
 let monitorRuntime;
+let monitorCommandRuntime;
 let monitorTimer;
 let reconnectTimer;
 let socketGeneration = 0;
@@ -384,15 +400,6 @@ async function notifyMonitor(sock, monitor, text) {
   }
 }
 
-function formatMonitorList() {
-  const entries = monitorRuntime?.list() ?? [];
-  if (!entries.length) return "Nessun monitor configurato.";
-  return entries.map((item) => [
-    `${item.enabled ? "🟢" : "⏸️"} ${item.id} — ${item.name}`,
-    `ultimo controllo: ${item.lastRun ?? "mai"}; ultimo alert: ${item.lastAlert ?? "mai"}`,
-  ].join("\n")).join("\n\n");
-}
-
 async function handleMessage(sock, msg) {
   const jid = msg.key.remoteJid;
   if (!jid || jid.endsWith("@g.us") || msg.key.fromMe) return;
@@ -407,6 +414,8 @@ async function handleMessage(sock, msg) {
     logger.warn({ sender, jid, senderJid }, "blocked WhatsApp sender");
     return;
   }
+  const isAdmin = adminNumbers.has(sender) || adminNumbers.has(remoteIdentity)
+    || adminIdentities.has(sender) || adminIdentities.has(remoteIdentity);
   const voice = Boolean(audioMessage(msg));
   let text = messageText(msg);
   if (!text && !voice) return;
@@ -416,6 +425,18 @@ async function handleMessage(sock, msg) {
   }
 
   const sessions = loadSessions();
+  if (isAdmin && monitorCommandRuntime && text) {
+    try {
+      const continuation = await monitorCommandRuntime.continueWizard(jid, text);
+      if (continuation) {
+        await sock.sendMessage(jid, { text: continuation });
+        return;
+      }
+    } catch (error) {
+      await sock.sendMessage(jid, { text: `Configurazione monitor non valida: ${error.message}` });
+      return;
+    }
+  }
   // Slash commands are deliberately text-only: a voice note is always treated
   // as a natural-language Codex request, even if its transcript starts with "/".
   if (text === "/new") {
@@ -430,20 +451,19 @@ async function handleMessage(sock, msg) {
     });
     return;
   }
-  if (text === "/monitors") {
-    await sock.sendMessage(jid, { text: formatMonitorList() });
-    return;
+  if (monitorCommandRuntime) {
+    try {
+      const command = await monitorCommandRuntime.handle(text, { owner: jid, isAdmin });
+      if (command.handled) {
+        await sock.sendMessage(jid, { text: command.reply });
+        return;
+      }
+    } catch (error) {
+      await sock.sendMessage(jid, { text: `Comando monitor non riuscito: ${error.message}` });
+      return;
+    }
   }
-  const monitorToggle = text.match(/^\/monitor\s+(\S+)\s+(on|off|pause)$/i);
-  if (monitorToggle) {
-    const enabled = monitorToggle[2].toLowerCase() === "on";
-    const changed = monitorRuntime?.setEnabled(monitorToggle[1], enabled);
-    await sock.sendMessage(jid, {
-      text: changed ? `Monitor ${monitorToggle[1]} ${enabled ? "attivato" : "sospeso"}.` : `Monitor ${monitorToggle[1]} non trovato.`,
-    });
-    return;
-  }
-  const brief = text.match(/^\/brief\s+(\S+)$/i);
+  const brief = text.match(/^\/(?:brief|monitor\s+brief)\s+(\S+)$/i);
   if (brief) {
     try {
       const result = await monitorRuntime.run(brief[1], { force: true, notify: false, persist: false });
@@ -456,7 +476,7 @@ async function handleMessage(sock, msg) {
     return;
   }
   if (text === "/help") {
-    await sock.sendMessage(jid, { text: "Comandi: /status, /new, /monitors, /monitor <id> on|off, /brief <id>, /help. Ogni altro messaggio viene inviato a Codex." });
+    await sock.sendMessage(jid, { text: "Comandi: /status, /new, /monitor list|show|create|confirm|cancel|enable|disable|brief, /monitors, /brief <id>, /help. Ogni altro messaggio viene inviato a Codex." });
     return;
   }
 
@@ -564,11 +584,17 @@ async function connect() {
         }
         monitorRuntime = new MonitorRuntime({
           configFile: monitorsFile,
+          managedConfigFile: managedMonitorsFile,
           stateFile: monitorStateFile,
           engineUrl,
           logger,
           analyze: analyzeMonitor,
           notify: (monitor, text) => notifyMonitor(sock, monitor, text),
+        });
+        monitorCommandRuntime = new MonitorCommandRuntime({
+          monitorRuntime,
+          stateFile: monitorCommandsFile,
+          geocoderUrl: process.env.WWV_AGENT_GEOCODER_URL,
         });
       } else {
         monitorRuntime.notify = (monitor, text) => notifyMonitor(sock, monitor, text);
@@ -610,6 +636,8 @@ if (mode === "status") {
     authExists,
     allowedNumbers: allowedNumbers.size,
     allowedIdentities: allowedIdentities.size,
+    adminNumbers: adminNumbers.size,
+    adminIdentities: adminIdentities.size,
     workspace,
     sessions: Object.keys(loadSessions()).length,
   }, null, 2));

@@ -63,6 +63,42 @@ number. The first successful run is always a silent baseline.
 The service account must be able to read this file; the installer uses ownership
 `root:<service-user>` and mode `0640`.
 
+### Managing monitors through WhatsApp
+
+Set `WWV_AGENT_ADMIN_NUMBERS` and, when an administrator is received only under
+an opaque LID, `WWV_AGENT_ADMIN_IDENTITIES`. These are separate from the broader
+operator allow-list. An administrator can start the guided creator with:
+
+```text
+/monitor create
+```
+
+The compact form is:
+
+```text
+/monitor create "Name" "Place or address" 10km earthquakes,wildfire,civil-unrest
+```
+
+The alternate `Name | Place | Radius | Layers` form is accepted as well. The
+relay geocodes the place through `WWV_AGENT_GEOCODER_URL` (Nominatim by default),
+shows coordinates, radius, layers and generated ID, then requires a six-character
+confirmation from the same chat within ten minutes. Place text is sent to the
+configured geocoding provider; point the variable at an approved compatible
+endpoint if this is a privacy concern.
+
+```text
+/monitor confirm A1B2C3
+/monitor cancel A1B2C3
+```
+
+Confirmed entries are written atomically to
+`/var/lib/wwv-agent/managed-monitors.json`, which is merged at runtime with the
+read-only administrative file `/etc/wwv-monitors.json`. The first check is a
+silent baseline. Other namespace commands are `/monitor list`,
+`/monitor show <id>`, `/monitor enable <id>`, `/monitor disable <id>` and
+`/monitor brief <id>`. Existing `/monitors`, `/monitor <id> on|off|pause` and
+`/brief <id>` commands remain compatible.
+
 Supported trigger fields are:
 
 - `newEvents`: notify for any newly fingerprinted event;

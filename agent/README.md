@@ -63,12 +63,30 @@ hard-code or commit identifiers observed in production. Automated tests use only
 synthetic JIDs and LIDs; replacing those values does not change retry behaviour.
 
 Commands sent through WhatsApp: `/help`, `/status`, `/new`, `/monitors`,
-`/monitor <id> on|off`, and `/brief <id>`.
+`/monitor list`, `/monitor show <id>`, `/monitor create`,
+`/monitor confirm <code>`, `/monitor cancel [code]`,
+`/monitor enable|disable <id>`, `/monitor brief <id>`, and `/brief <id>`.
 
 - `/new` drops only that sender's saved Codex thread.
 - `/status` reports relay, headless globe, sandbox, voice and monitor status.
 - `/brief <id>` evaluates current snapshots without notifying or marking events.
 - `/monitor <id> pause` is accepted as an alias for `off`.
+- `/monitor create` starts an administrator-only guided workflow. Its pending
+  steps and confirmation expire after ten minutes. The compact equivalent is
+  `/monitor create "Name" "Place" 10km earthquakes,wildfire` (a pipe-delimited
+  `Name | Place | 10km | layers` form is also accepted).
+- Creation geocodes the supplied place through the configured Nominatim endpoint,
+  displays the resolved location and complete monitor preview, and writes
+  nothing until `/monitor confirm <code>` is received from the same chat.
+- Confirmed monitors are atomically stored in the private
+  `/var/lib/wwv-agent/managed-monitors.json` overlay. The root-managed
+  `/etc/wwv-monitors.json` remains read-only. New monitors begin with a silent
+  baseline and use conservative five-minute polling, seven-day deduplication
+  retention and a thirty-minute notification cooldown.
+- Only identities listed by `WWV_AGENT_ADMIN_NUMBERS` or
+  `WWV_AGENT_ADMIN_IDENTITIES` can create and confirm monitors. Listing,
+  inspection, brief and the legacy enable/disable controls remain available to
+  other allow-listed operators.
 
 ## TODO
 

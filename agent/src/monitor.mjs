@@ -216,8 +216,9 @@ export function writeJson(file, value) {
 }
 
 export class MonitorRuntime {
-  constructor({ configFile, stateFile, engineUrl, logger, analyze, notify }) {
+  constructor({ configFile, managedConfigFile, stateFile, engineUrl, logger, analyze, notify }) {
     this.configFile = configFile;
+    this.managedConfigFile = managedConfigFile;
     this.stateFile = stateFile;
     this.engineUrl = engineUrl.replace(/\/+$/, "");
     this.logger = logger;
@@ -227,7 +228,23 @@ export class MonitorRuntime {
   }
 
   config() {
-    return readJson(this.configFile, { monitors: [] });
+    const base = readJson(this.configFile, { monitors: [] });
+    const managed = this.managedConfigFile
+      ? readJson(this.managedConfigFile, { monitors: [] })
+      : { monitors: [] };
+    return { monitors: [...(base.monitors ?? []), ...(managed.monitors ?? [])] };
+  }
+
+  addManagedMonitor(monitor) {
+    if (!this.managedConfigFile) throw new Error("Monitor gestiti non configurati");
+    if ((this.config().monitors ?? []).some((item) => item.id === monitor.id)) {
+      throw new Error(`Esiste già un monitor con ID ${monitor.id}`);
+    }
+    const managed = readJson(this.managedConfigFile, { monitors: [] });
+    managed.monitors ??= [];
+    managed.monitors.push(monitor);
+    writeJson(this.managedConfigFile, managed);
+    return monitor;
   }
 
   state() {
