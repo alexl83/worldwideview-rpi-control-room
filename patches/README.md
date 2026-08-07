@@ -26,7 +26,7 @@ The remaining WWV fork extension used by this deployment is not presented as an
 upstream bug:
 
 - [`0844ef52`](https://github.com/alexl83/worldwideview/commit/0844ef52): session-pinned, authenticated frontend agent chat over the control room's local Unix-socket relay. This is deployment architecture, not a defect in stock WWV.
-- [`99ec9d13`](https://github.com/alexl83/worldwideview/commit/99ec9d13): explicitly recreates a terminally closed globe-command `EventSource` with bounded exponential backoff. This keeps an already-open browser tab controllable after a WWV container or reverse-proxy restart instead of requiring a hard refresh.
+- [`7793a928`](https://github.com/alexl83/worldwideview/commit/7793a928): explicitly recreates a terminally closed globe-command `EventSource` with bounded exponential backoff. This operational commit is based on the fork's `main` branch, so it also retains the local-agent launcher and disabled-plugin bootstrap fixes. It keeps an already-open browser tab controllable after a WWV container or reverse-proxy restart instead of requiring a hard refresh.
 
 ## WWV data engine
 
