@@ -5,7 +5,7 @@ dashboard, generic plugin runtime, or privileged execution path. Its authenticat
 frontend transport is HTTP over a local Unix socket only.
 
 The relay starts Codex in `read-only` mode, preserves one native Codex thread per
-allowed WhatsApp direct chat, rejects groups and unknown senders, and relies on
+allowed WhatsApp direct chat, rejects unknown senders, and relies on
 the WorldwideView MCP entry in the service user's Codex configuration. WhatsApp
 turns are always pinned to the stable headless globe through Caddy's loopback MCP
 alias; they never select or control an operator's interactive tab.
@@ -15,6 +15,14 @@ kept separate. `WWV_AGENT_ALLOWED_NUMBERS` contains E.164 phone numbers and is
 also the source for default monitor recipients. `WWV_AGENT_ALLOWED_IDENTITIES`
 contains exceptional LIDs used only to accept inbound messages when Baileys does
 not provide a phone-number alias; LIDs are never notification destinations.
+
+Authorized WhatsApp groups are deliberately passive alert destinations. They
+never create Codex threads, accept live questions, execute monitor commands or
+control a WWV session. The only accepted inbound group message is the one-time
+`/group-pair <code>` enrollment command sent by an administrator already present
+in the relay's private admin allow-list. Enrolled group JIDs, assignments and
+metadata live only in mode-`0600` state at
+`/var/lib/wwv-agent/whatsapp-groups.json`; real JIDs must not be committed.
 
 The integrated monitor polls engine snapshots without invoking an LLM, establishes
 a silent first-run baseline, filters events by geodesic radius, deduplicates them,
@@ -66,6 +74,9 @@ Commands sent through WhatsApp: `/help`, `/status`, `/new`, `/monitors`,
 `/monitor list`, `/monitor show <id>`, `/monitor create`,
 `/monitor confirm <code>`, `/monitor cancel [code]`,
 `/monitor enable|disable <id>`, `/monitor brief <id>`, and `/brief <id>`.
+Administrator-only group commands are `/group pair`, `/group list`,
+`/group assign <monitor-id> <group-id>`, `/group unassign <monitor-id> <group-id>`
+and `/group enable|disable <group-id>`.
 
 - `/new` drops only that sender's saved Codex thread.
 - `/status` reports relay, headless globe, sandbox, voice and monitor status.
@@ -88,6 +99,34 @@ Commands sent through WhatsApp: `/help`, `/status`, `/new`, `/monitors`,
   inspection, brief and the legacy enable/disable controls remain available to
   other allow-listed operators.
 
+### Passive monitor groups
+
+1. Add the dedicated Chatty account to the WhatsApp group using an official
+   client.
+2. In a private chat, an authorized administrator sends `/group pair`.
+3. Within ten minutes, the same authorized administrator sends the returned
+   `/group-pair CODE` command inside the group.
+4. Back in the private chat, use `/group list` to obtain the local group ID and
+   `/group assign <monitor-id> <group-id>` to route future alerts.
+
+Pairing codes are random, single-use and expire after ten minutes. Assignment is
+additive: existing private recipients keep receiving alerts. `/group disable`
+suspends delivery without deleting assignments. `notification.targets` also
+supports explicit typed destinations:
+
+```json
+{
+  "targets": [
+    { "type": "phone", "number": "15551234567" },
+    { "type": "group", "group": "family-watch" }
+  ]
+}
+```
+
+Legacy `notification.recipients` remains supported. Phone targets must be in
+`WWV_AGENT_ALLOWED_NUMBERS`; group aliases must resolve to an enabled, privately
+enrolled group. A group JID or participant LID can never become a phone target.
+
 ## TODO
 
 - [ ] Add secure self-service enrollment for a new WhatsApp identity. An
@@ -96,13 +135,3 @@ Commands sent through WhatsApp: `/help`, `/status`, `/new`, `/monitors`,
   and stores the observed LID as an authorized inbound identity. The workflow
   must rate-limit attempts, avoid logging the code, keep phone numbers and LIDs
   out of the repository, and must not add a LID to monitor recipients.
-- [ ] **Optional:** add full WhatsApp group support. Keep group JIDs in a
-  dedicated private allow-list and enroll groups through a short-lived,
-  single-use administrator code. Define per-group member/LID authorization,
-  require an explicit mention or reply by default, support configurable shared
-  versus per-member Codex threads, serialize globe-control requests, quote the
-  triggering message, and preserve voice, disappearing-message and retry
-  behavior. Monitor notifications must use typed phone/group targets so neither
-  a participant LID nor mere group membership can grant control or become an
-  alert destination. Administrative commands must remain restricted to
-  explicitly authorized operators.

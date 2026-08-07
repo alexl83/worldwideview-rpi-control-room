@@ -113,6 +113,35 @@ clamped to a minimum of 60 seconds. Multiple profiles are checked serially to
 avoid lost state updates. Earthquakes can be included simply by adding the
 `earthquakes` layer and a `minimumMagnitude` trigger.
 
+### Passive WhatsApp group delivery
+
+Groups are alert sinks only: group messages never reach Codex, create a session,
+run a live brief, alter monitors or control the globe. Enrollment is performed
+without copying the private group JID into configuration:
+
+```text
+# private administrator chat
+/group pair
+
+# inside the intended group, within ten minutes
+/group-pair A1B2C3D4
+
+# back in the private administrator chat
+/group list
+/group assign kos-aegean-bay-security family-watch
+```
+
+The code is single-use. Registration and assignments are stored mode `0600` in
+`/var/lib/wwv-agent/whatsapp-groups.json`. Use `/group unassign`,
+`/group disable` and `/group enable` to manage routing. The optional
+`WWV_AGENT_ALLOWED_GROUPS` variable can bootstrap comma-separated private
+`@g.us` JIDs, but interactive enrollment is preferred; never commit real JIDs.
+
+Monitor configuration may use typed `notification.targets` with `phone` and
+`group` entries. Legacy `notification.recipients` remains compatible. Runtime
+assignments are additive and preserve private recipients. Disappearing-message
+metadata and multi-device retries use the same outbound path for group alerts.
+
 Authenticate Codex under the same Unix account used by systemd:
 
 ```bash

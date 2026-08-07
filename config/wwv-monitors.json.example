@@ -48,7 +48,10 @@
       },
       "notification": {
         "cooldownMinutes": 30,
-        "recipients": ["15551234567"]
+        "targets": [
+          { "type": "phone", "number": "15551234567" },
+          { "type": "group", "group": "family-watch" }
+        ]
       }
     }
   ]

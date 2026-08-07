@@ -36,6 +36,8 @@ remain in root-owned environment files on the Pi.
   plus fully local Italian speech recognition and synthesis. Voice notes receive
   the complete text answer followed by audio; written queries remain text-only.
 - automatic geofenced monitoring with silent baseline, deduplication and cooldown.
+- securely enrolled WhatsApp groups as passive, per-monitor alert destinations;
+  group messages never invoke Codex or control WorldWideView.
 - configurable concurrent watch profiles (center, radius, layers, interval,
   trigger thresholds, retention, recipients and cooldown), including earthquakes.
 - sourced GDELT Event 2.0 ingestion with stable IDs, CAMEO classification and no

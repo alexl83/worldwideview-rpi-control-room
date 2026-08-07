@@ -18,6 +18,8 @@ import { MonitorCommandRuntime } from "./monitor-commands.mjs";
 import { findOutboundEntry, outboundKey } from "./outbound-cache.mjs";
 import { VoiceRuntime, audioMessage } from "./voice.mjs";
 import { parseEphemeralExpiration, sendOptionsFor } from "./whatsapp-send-options.mjs";
+import { GroupRegistry, isGroupJid } from "./group-registry.mjs";
+import { notificationTargets } from "./notification-targets.mjs";
 
 const mode = process.argv[2] ?? "run";
 const stateDir = process.env.WWV_AGENT_STATE_DIR ?? "/var/lib/wwv-agent";
@@ -29,6 +31,7 @@ const monitorsFile = process.env.WWV_AGENT_MONITORS_FILE ?? "/etc/wwv-monitors.j
 const monitorStateFile = path.join(stateDir, "monitor-state.json");
 const managedMonitorsFile = path.join(stateDir, "managed-monitors.json");
 const monitorCommandsFile = path.join(stateDir, "monitor-commands.json");
+const groupsFile = path.join(stateDir, "whatsapp-groups.json");
 const engineUrl = process.env.WWV_AGENT_ENGINE_URL ?? "http://127.0.0.1:5000";
 const frontendSocket = process.env.WWV_AGENT_FRONTEND_SOCKET ?? "/run/wwv-agent/chat.sock";
 const frontendToken = process.env.WWV_AGENT_SOCKET_TOKEN ?? "";
@@ -76,6 +79,9 @@ const adminIdentities = new Set(
     .map(normalizeNumber)
     .filter(Boolean),
 );
+const configuredGroupJids = (process.env.WWV_AGENT_ALLOWED_GROUPS ?? "")
+  .split(",").map((value) => value.trim()).filter(isGroupJid);
+const groupRegistry = new GroupRegistry({ stateFile: groupsFile, allowedGroupJids: configuredGroupJids });
 const active = new Set();
 let monitorRuntime;
 let monitorCommandRuntime;
@@ -389,20 +395,92 @@ async function analyzeMonitor(monitor, result) {
 }
 
 async function notifyMonitor(sock, monitor, text) {
-  const configured = monitor.notification?.recipients;
-  const recipients = Array.isArray(configured) && configured.length
-    ? configured.map(normalizeNumber).filter((number) => allowedNumbers.has(number))
-    : [...allowedNumbers].slice(0, 1);
-  for (const number of recipients) {
+  const targets = notificationTargets(monitor, { allowedNumbers, groups: groupRegistry });
+  for (const target of targets) {
     for (const chunk of splitText(text)) {
-      await sock.sendMessage(`${number}@s.whatsapp.net`, { text: chunk });
+      await sock.sendMessage(target.jid, { text: chunk });
     }
   }
 }
 
+function senderIdentities(msg) {
+  const candidates = [
+    msg.key.participantAlt,
+    msg.key.participant,
+    msg.key.remoteJidAlt,
+    msg.key.remoteJid,
+  ].filter(Boolean);
+  return [...new Set(candidates.map((jid) => normalizeNumber(jid.split("@")[0])).filter(Boolean))];
+}
+
+function isAdministrator(msg) {
+  return senderIdentities(msg).some((identity) => (
+    adminNumbers.has(identity) || adminIdentities.has(identity)
+  ));
+}
+
+async function handleGroupMessage(sock, msg) {
+  const jid = msg.key.remoteJid;
+  const text = messageText(msg);
+  const pairing = text.match(/^\/group-pair\s+([A-F0-9]{8})$/i);
+  // Groups are passive alert sinks. Pairing is the sole accepted inbound
+  // operation and still requires a separately authorized relay administrator.
+  if (!pairing || !isAdministrator(msg)) return;
+  try {
+    const metadata = await sock.groupMetadata(jid);
+    const enrolledBy = senderIdentities(msg)[0];
+    const group = groupRegistry.enroll({
+      code: pairing[1], jid, enrolledBy, subject: metadata?.subject,
+    });
+    await sock.sendMessage(jid, {
+      text: `Gruppo registrato come “${group.id}”. È un destinatario passivo: non accetta interrogazioni o comandi. Un amministratore può assegnargli monitor dalla chat privata.`,
+    }, { quoted: msg });
+    logger.info({ groupId: group.id }, "WhatsApp monitor group enrolled");
+  } catch (error) {
+    logger.warn({ error, jid }, "WhatsApp group enrollment failed");
+    await sock.sendMessage(jid, { text: `Associazione gruppo non riuscita: ${error.message}` }, { quoted: msg });
+  }
+}
+
+function groupListText() {
+  const groups = groupRegistry.list();
+  if (!groups.length) return "Nessun gruppo registrato.";
+  return groups.map((group) => `${group.enabled ? "🟢" : "⏸️"} ${group.id} — ${group.name}`).join("\n");
+}
+
+function handleGroupAdminCommand(text, owner) {
+  if (text === "/group pair") {
+    const code = groupRegistry.createPairing(owner);
+    return `Codice monouso: ${code}\nInvia nel gruppo entro 10 minuti: /group-pair ${code}`;
+  }
+  if (text === "/group list" || text === "/groups") return groupListText();
+  const assignment = text.match(/^\/group\s+(assign|unassign)\s+(\S+)\s+(\S+)$/i);
+  if (assignment) {
+    const [, action, monitorId, groupId] = assignment;
+    if (!monitorRuntime.config().monitors.some((monitor) => monitor.id === monitorId)) return `Monitor ${monitorId} non trovato.`;
+    if (!groupRegistry.assign(monitorId, groupId, action.toLowerCase() === "assign")) return `Gruppo ${groupId} non trovato.`;
+    return `Gruppo ${groupId} ${action.toLowerCase() === "assign" ? "assegnato al" : "rimosso dal"} monitor ${monitorId}.`;
+  }
+  const toggle = text.match(/^\/group\s+(enable|disable)\s+(\S+)$/i);
+  if (toggle) {
+    const enabled = toggle[1].toLowerCase() === "enable";
+    return groupRegistry.setEnabled(toggle[2], enabled)
+      ? `Gruppo ${toggle[2]} ${enabled ? "attivato" : "sospeso"}.`
+      : `Gruppo ${toggle[2]} non trovato.`;
+  }
+  if (/^\/group(?:\s|$)/i.test(text)) {
+    return "Comandi gruppi: /group pair, /group list, /group assign <monitor> <gruppo>, /group unassign <monitor> <gruppo>, /group enable|disable <gruppo>.";
+  }
+  return null;
+}
+
 async function handleMessage(sock, msg) {
   const jid = msg.key.remoteJid;
-  if (!jid || jid.endsWith("@g.us") || msg.key.fromMe) return;
+  if (!jid || msg.key.fromMe) return;
+  if (isGroupJid(jid)) {
+    await handleGroupMessage(sock, msg);
+    return;
+  }
   // Recent WhatsApp accounts may use an opaque LID as remoteJid. Baileys
   // exposes the corresponding phone-number JID in one of the *Alt fields.
   const senderJid = msg.key.remoteJidAlt ?? msg.key.participantAlt ?? msg.key.participant ?? jid;
@@ -414,8 +492,7 @@ async function handleMessage(sock, msg) {
     logger.warn({ sender, jid, senderJid }, "blocked WhatsApp sender");
     return;
   }
-  const isAdmin = adminNumbers.has(sender) || adminNumbers.has(remoteIdentity)
-    || adminIdentities.has(sender) || adminIdentities.has(remoteIdentity);
+  const isAdmin = isAdministrator(msg);
   const voice = Boolean(audioMessage(msg));
   let text = messageText(msg);
   if (!text && !voice) return;
@@ -451,6 +528,13 @@ async function handleMessage(sock, msg) {
     });
     return;
   }
+  if (isAdmin && text) {
+    const groupReply = handleGroupAdminCommand(text, jid);
+    if (groupReply) {
+      await sock.sendMessage(jid, { text: groupReply });
+      return;
+    }
+  }
   if (monitorCommandRuntime) {
     try {
       const command = await monitorCommandRuntime.handle(text, { owner: jid, isAdmin });
@@ -476,7 +560,7 @@ async function handleMessage(sock, msg) {
     return;
   }
   if (text === "/help") {
-    await sock.sendMessage(jid, { text: "Comandi: /status, /new, /monitor list|show|create|confirm|cancel|enable|disable|brief, /monitors, /brief <id>, /help. Ogni altro messaggio viene inviato a Codex." });
+    await sock.sendMessage(jid, { text: "Comandi: /status, /new, /monitor list|show|create|confirm|cancel|enable|disable|brief, /monitors, /brief <id>, /group pair|list|assign|unassign|enable|disable (admin), /help. Ogni altro messaggio viene inviato a Codex." });
     return;
   }
 
@@ -638,6 +722,7 @@ if (mode === "status") {
     allowedIdentities: allowedIdentities.size,
     adminNumbers: adminNumbers.size,
     adminIdentities: adminIdentities.size,
+    groups: groupRegistry.list().length,
     workspace,
     sessions: Object.keys(loadSessions()).length,
   }, null, 2));
