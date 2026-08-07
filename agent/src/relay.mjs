@@ -34,7 +34,8 @@ const managedMonitorsFile = path.join(stateDir, "managed-monitors.json");
 const monitorCommandsFile = path.join(stateDir, "monitor-commands.json");
 const groupsFile = path.join(stateDir, "whatsapp-groups.json");
 const engineUrl = process.env.WWV_AGENT_ENGINE_URL ?? "http://127.0.0.1:5000";
-const frontendSocket = process.env.WWV_AGENT_FRONTEND_SOCKET ?? "/run/wwv-agent/chat.sock";
+const frontendSocket = process.env.WWV_AGENT_FRONTEND_SOCKET
+  ?? "/var/lib/wwv-agent/run/chat.sock";
 const frontendToken = process.env.WWV_AGENT_SOCKET_TOKEN ?? "";
 const headlessSessionId = process.env.WWV_AGENT_HEADLESS_SESSION_ID ?? "";
 const workspace = process.env.WWV_AGENT_WORKSPACE ?? "/srv/worldwideview";

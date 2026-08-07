@@ -256,9 +256,13 @@ incompatible packages such as the ISS plugin from producing bootstrap errors.
 
 For frontend chat, generate one long random `WWV_AGENT_SOCKET_TOKEN` and place
 the same value in `/etc/wwv-agent.env` and `/etc/worldwideview.env`. The Compose
-file mounts `/run/wwv-agent` into the WWV container. Requests remain bound to the
-tab that opened the chat; closing that tab makes subsequent turns fail rather
-than falling back to the headless globe.
+file mounts the persistent host directory `/var/lib/wwv-agent/run` at
+`/run/wwv-agent` inside the WWV container. Do not use a systemd
+`RuntimeDirectory` as the bind source: systemd deletes and recreates that
+directory on every relay restart, while an already-running container remains
+attached to the deleted inode and reports `ENOENT` for `chat.sock`. Requests
+remain bound to the tab that opened the chat; closing that tab makes subsequent
+turns fail rather than falling back to the headless globe.
 
 Set `WWV_AGENT_HEADLESS_SESSION_ID` in `/etc/wwv-agent.env` to the same stable
 UUID used by `WWV_HEADLESS_SESSION_ID` in `/etc/wwv-headless.env`. Every

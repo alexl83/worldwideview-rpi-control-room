@@ -19,6 +19,8 @@ readonly SERVICE_HOME="$(getent passwd "$SERVICE_USER" | cut -d: -f6)"
 install -d -o "$SERVICE_USER" -g "$SERVICE_USER" /opt/wwv-agent /opt/wwv-headless
 install -d -m 0700 -o "$SERVICE_USER" -g "$SERVICE_USER" \
   /var/lib/wwv-agent /var/lib/wwv-browser
+install -d -m 0755 -o "$SERVICE_USER" -g "$SERVICE_USER" \
+  /var/lib/wwv-agent/run
 
 rsync -a --delete --exclude node_modules/ "$REPO_DIR/agent/" /opt/wwv-agent/
 rsync -a --delete --exclude node_modules/ "$REPO_DIR/headless/" /opt/wwv-headless/

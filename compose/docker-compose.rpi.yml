@@ -18,7 +18,9 @@ services:
     volumes:
       - wwv-data:/app/data
       - ${WWV_PLUGINS_DIR:-/srv/worldwideview/public/plugins-local}:/app/public/plugins-local:ro
-      - /run/wwv-agent:/run/wwv-agent
+      # The host source must survive wwv-agent service restarts. Mounting a
+      # systemd RuntimeDirectory leaves Docker attached to a deleted inode.
+      - /var/lib/wwv-agent/run:/run/wwv-agent
     env_file:
       - /etc/worldwideview.env
     environment:
