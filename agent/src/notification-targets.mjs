@@ -1,7 +1,7 @@
 export function notificationTargets(monitor, { allowedNumbers, groups }) {
   const result = new Map();
   const configured = monitor.notification?.targets;
-  if (Array.isArray(configured) && configured.length) {
+  if (Array.isArray(configured)) {
     for (const target of configured) {
       if (target?.type === "phone") {
         const number = String(target.number ?? "").replace(/[^0-9]/g, "");

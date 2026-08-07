@@ -23,6 +23,11 @@ test("pairing is single use and enrolled groups can be assigned to monitors", ()
   assert.equal(registry.targetsForMonitor("kos-watch")[0].jid, "120363012345678901@g.us");
   const restarted = new GroupRegistry({ stateFile: registry.stateFile });
   assert.equal(restarted.targetsForMonitor("kos-watch")[0].jid, "120363012345678901@g.us");
+  assert.equal(restarted.setMonitorEnabled("kos-watch", group.id, false), true);
+  assert.deepEqual(restarted.targetsForMonitor("kos-watch"), []);
+  assert.equal(restarted.monitorEnabled("kos-watch", group.id), false);
+  restarted.setMonitorEnabled("kos-watch", group.id, true);
+  assert.equal(restarted.targetsForMonitor("kos-watch").length, 1);
 });
 
 test("expired pairing cannot enroll a group", () => {
@@ -46,4 +51,8 @@ test("typed and assigned targets preserve phone allow-list and group policy", ()
     ] },
   }, { allowedNumbers: new Set(["39111"]), groups: registry });
   assert.deepEqual(targets.map((target) => target.jid).sort(), ["120363012345678901@g.us", "39111@s.whatsapp.net"]);
+  assert.deepEqual(notificationTargets({
+    id: "silent",
+    notification: { targets: [] },
+  }, { allowedNumbers: new Set(["39111"]), groups: registry }), []);
 });

@@ -20,10 +20,11 @@ export class GroupRegistry {
   }
 
   state() {
-    const state = readJson(this.stateFile, { groups: {}, pairings: {}, assignments: {} });
+    const state = readJson(this.stateFile, { groups: {}, pairings: {}, assignments: {}, monitorOverrides: {} });
     state.groups ??= {};
     state.pairings ??= {};
     state.assignments ??= {};
+    state.monitorOverrides ??= {};
     // The private registry is itself an authorization source. Restore enrolled
     // JIDs after every process restart without requiring them in an env file.
     for (const group of Object.values(state.groups)) {
@@ -76,6 +77,11 @@ export class GroupRegistry {
     return Object.entries(state.groups).map(([id, group]) => ({ id, ...group }));
   }
 
+  findByJid(jid) {
+    const entry = Object.entries(this.state().groups).find(([, group]) => group.jid === jid);
+    return entry ? { id: entry[0], ...entry[1] } : null;
+  }
+
   setEnabled(id, enabled) {
     const state = this.state();
     if (!state.groups[id]) return false;
@@ -88,8 +94,14 @@ export class GroupRegistry {
     const state = this.state();
     if (!state.groups[groupId]) return false;
     const assigned = new Set(state.assignments[monitorId] ?? []);
-    if (enabled) assigned.add(groupId);
-    else assigned.delete(groupId);
+    if (enabled) {
+      assigned.add(groupId);
+      state.monitorOverrides[groupId] ??= {};
+      delete state.monitorOverrides[groupId][monitorId];
+    } else {
+      assigned.delete(groupId);
+      if (state.monitorOverrides[groupId]) delete state.monitorOverrides[groupId][monitorId];
+    }
     state.assignments[monitorId] = [...assigned];
     this.save(state);
     return true;
@@ -99,7 +111,28 @@ export class GroupRegistry {
     const state = this.state();
     return (state.assignments[monitorId] ?? [])
       .map((id) => ({ id, ...state.groups[id] }))
-      .filter((group) => group.enabled && this.allowedGroupJids.has(group.jid));
+      .filter((group) => group.enabled
+        && state.monitorOverrides[group.id]?.[monitorId] !== false
+        && this.allowedGroupJids.has(group.jid));
+  }
+
+  isAssigned(monitorId, groupId) {
+    return (this.state().assignments[monitorId] ?? []).includes(groupId);
+  }
+
+  setMonitorEnabled(monitorId, groupId, enabled) {
+    const state = this.state();
+    if (!(state.assignments[monitorId] ?? []).includes(groupId)) return false;
+    state.monitorOverrides[groupId] ??= {};
+    state.monitorOverrides[groupId][monitorId] = enabled;
+    this.save(state);
+    return true;
+  }
+
+  monitorEnabled(monitorId, groupId) {
+    const state = this.state();
+    return this.isAssigned(monitorId, groupId)
+      && state.monitorOverrides[groupId]?.[monitorId] !== false;
   }
 
   resolve(id) {

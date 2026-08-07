@@ -46,7 +46,7 @@ export function parseInlineCreate(value) {
   throw new Error('Usa: /monitor create "Nome" "Luogo" 10km earthquakes,wildfire');
 }
 
-function monitorFrom(spec, location) {
+function monitorFrom(spec, location, notification) {
   const layers = spec.layers;
   return {
     id: slug(spec.name),
@@ -64,7 +64,7 @@ function monitorFrom(spec, location) {
       ...(layers.includes("conflict-events") ? { minimumFatalities: 1 } : {}),
       ...(layers.includes("military-aviation") ? { aircraftEnteringArea: true } : {}),
     },
-    notification: { cooldownMinutes: 30 },
+    notification: notification ?? { cooldownMinutes: 30 },
   };
 }
 
@@ -95,10 +95,11 @@ async function geocode(place, endpoint) {
 }
 
 export class MonitorCommandRuntime {
-  constructor({ monitorRuntime, stateFile, geocoderUrl = "https://nominatim.openstreetmap.org/search" }) {
+  constructor({ monitorRuntime, stateFile, geocoderUrl = "https://nominatim.openstreetmap.org/search", onMonitorAdded }) {
     this.monitorRuntime = monitorRuntime;
     this.stateFile = stateFile;
     this.geocoderUrl = geocoderUrl;
+    this.onMonitorAdded = onMonitorAdded;
   }
 
   state() {
@@ -127,17 +128,17 @@ export class MonitorCommandRuntime {
     ].join("\n")).join("\n\n") : "Nessun monitor configurato.";
   }
 
-  async prepare(owner, spec) {
+  async prepare(owner, spec, context = {}) {
     if (!spec.name.trim()) throw new Error("Il nome non può essere vuoto");
     const location = await geocode(spec.place, this.geocoderUrl);
-    const monitor = monitorFrom(spec, location);
+    const monitor = monitorFrom(spec, location, context.notification);
     if (!monitor.id) throw new Error("Il nome non produce un ID valido");
     if (this.monitorRuntime.config().monitors.some((item) => item.id === monitor.id)) {
       throw new Error(`Esiste già un monitor con ID ${monitor.id}`);
     }
     const state = this.state();
     const code = crypto.randomBytes(3).toString("hex").toUpperCase();
-    state.confirmations[code] = { owner, expiresAt: Date.now() + DRAFT_TTL_MS, monitor };
+    state.confirmations[code] = { owner, expiresAt: Date.now() + DRAFT_TTL_MS, monitor, context };
     delete state.wizards[owner];
     this.save(state);
     return `${formatMonitor(monitor)}\n\nConferma entro 10 minuti con /monitor confirm ${code}\nAnnulla con /monitor cancel ${code}`;
@@ -169,10 +170,10 @@ export class MonitorCommandRuntime {
       return "Quali layer? Esempio: earthquakes, wildfire, civil-unrest";
     }
     wizard.data.layers = parseLayers(text);
-    return await this.prepare(owner, wizard.data);
+    return await this.prepare(owner, wizard.data, wizard.context);
   }
 
-  async handle(text, { owner, isAdmin }) {
+  async handle(text, { owner, isAdmin, context = {} }) {
     if (text === "/monitors" || /^\/monitor\s+list$/i.test(text)) return { handled: true, reply: this.list() };
     if (!/^\/monitor(?:\s|$)/i.test(text)) return { handled: false };
     const create = text.match(/^\/monitor\s+create(?:\s+([\s\S]+))?$/i);
@@ -180,11 +181,11 @@ export class MonitorCommandRuntime {
       if (!isAdmin) return { handled: true, reply: "Comando riservato agli amministratori." };
       if (!create[1]) {
         const state = this.state();
-        state.wizards[owner] = { stage: "name", expiresAt: Date.now() + DRAFT_TTL_MS, data: {} };
+        state.wizards[owner] = { stage: "name", expiresAt: Date.now() + DRAFT_TTL_MS, data: {}, context };
         this.save(state);
         return { handled: true, reply: "Come vuoi chiamare il nuovo monitor?" };
       }
-      return { handled: true, reply: await this.prepare(owner, parseInlineCreate(create[1])) };
+      return { handled: true, reply: await this.prepare(owner, parseInlineCreate(create[1]), context) };
     }
     const confirm = text.match(/^\/monitor\s+confirm\s+([A-F0-9]{6})$/i);
     if (confirm) {
@@ -194,6 +195,7 @@ export class MonitorCommandRuntime {
       const draft = state.confirmations[code];
       if (!draft || draft.owner !== owner) return { handled: true, reply: "Conferma inesistente, scaduta o appartenente a un’altra chat." };
       this.monitorRuntime.addManagedMonitor(draft.monitor);
+      await this.onMonitorAdded?.(draft.monitor, draft.context ?? {});
       delete state.confirmations[code];
       this.save(state);
       return { handled: true, reply: `Monitor ${draft.monitor.id} creato. La prima esecuzione stabilirà una baseline silenziosa.` };

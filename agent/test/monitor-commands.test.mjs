@@ -92,3 +92,28 @@ test("guided creation collects fields and non-admin creation is rejected", async
   assert.match(await commands.continueWizard("admin", "10 km"), /layer/);
   assert.match(await commands.continueWizard("admin", "earthquakes, wildfire"), /\/monitor confirm/);
 });
+
+test("group-scoped creation preserves context and has no implicit phone target", async (t) => {
+  const files = fixture(t);
+  let added;
+  const commands = new MonitorCommandRuntime({
+    monitorRuntime: files.monitorRuntime,
+    stateFile: path.join(files.directory, "commands.json"),
+    geocoderUrl: await geocoder(t),
+    onMonitorAdded: async (monitor, context) => { added = { monitor, context }; },
+  });
+  const context = {
+    groupId: "family",
+    notification: { cooldownMinutes: 30, targets: [] },
+  };
+  const prepared = await commands.handle(
+    '/monitor create "Family watch" "Legnano" 10km earthquakes',
+    { owner: "group:family", isAdmin: true, context },
+  );
+  const code = prepared.reply.match(/\/monitor confirm ([A-F0-9]{6})/)[1];
+  await commands.handle(`/monitor confirm ${code}`, {
+    owner: "group:family", isAdmin: true, context,
+  });
+  assert.equal(added.context.groupId, "family");
+  assert.deepEqual(added.monitor.notification.targets, []);
+});

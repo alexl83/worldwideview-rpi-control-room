@@ -16,12 +16,13 @@ also the source for default monitor recipients. `WWV_AGENT_ALLOWED_IDENTITIES`
 contains exceptional LIDs used only to accept inbound messages when Baileys does
 not provide a phone-number alias; LIDs are never notification destinations.
 
-Authorized WhatsApp groups are deliberately passive alert destinations. They
-never create Codex threads, accept live questions, execute monitor commands or
-control a WWV session. The only accepted inbound group message is the one-time
-`/group-pair <code>` enrollment command sent by an administrator already present
-in the relay's private admin allow-list. Enrolled group JIDs, assignments and
-metadata live only in mode-`0600` state at
+Authorized WhatsApp groups are alert destinations with a monitor-only control
+plane. They never create Codex threads, accept live questions or control a WWV
+session. After secure enrollment, current WhatsApp group administrators may
+create and manage only that group's monitor subscriptions. Initial
+`/group-pair <code>` enrollment still requires an administrator already present
+in the relay's private global admin allow-list. Enrolled group JIDs, assignments
+and metadata live only in mode-`0600` state at
 `/var/lib/wwv-agent/whatsapp-groups.json`; real JIDs must not be committed.
 
 The integrated monitor polls engine snapshots without invoking an LLM, establishes
@@ -108,6 +109,15 @@ and `/group enable|disable <group-id>`.
    `/group-pair CODE` command inside the group.
 4. Back in the private chat, use `/group list` to obtain the local group ID and
    `/group assign <monitor-id> <group-id>` to route future alerts.
+
+Once enrolled, a current WhatsApp group administrator can work directly inside
+the group with `/monitor list`, `/monitor assign <id>`, `/monitor unassign <id>`,
+`/monitor show <id>`, `/monitor create`, `/monitor confirm <code>`,
+`/monitor cancel`, `/monitor enable|disable <id>` and `/monitor brief <id>`.
+Non-administrators and non-command messages are ignored. Group `enable` and
+`disable` alter delivery only for that group; they do not pause the monitor for
+private contacts or other groups. A monitor created in a group is automatically
+assigned exclusively to that group and has no implicit private recipient.
 
 Pairing codes are random, single-use and expire after ten minutes. Assignment is
 additive: existing private recipients keep receiving alerts. `/group disable`

@@ -113,11 +113,12 @@ clamped to a minimum of 60 seconds. Multiple profiles are checked serially to
 avoid lost state updates. Earthquakes can be included simply by adding the
 `earthquakes` layer and a `minimumMagnitude` trigger.
 
-### Passive WhatsApp group delivery
+### Group-scoped WhatsApp monitor control
 
-Groups are alert sinks only: group messages never reach Codex, create a session,
-run a live brief, alter monitors or control the globe. Enrollment is performed
-without copying the private group JID into configuration:
+Groups never send natural-language requests to Codex, create a session or
+control the globe. They expose a monitor-only command plane to current WhatsApp
+group administrators. Enrollment is performed without copying the private group
+JID into configuration:
 
 ```text
 # private administrator chat
@@ -141,6 +142,28 @@ Monitor configuration may use typed `notification.targets` with `phone` and
 `group` entries. Legacy `notification.recipients` remains compatible. Runtime
 assignments are additive and preserve private recipients. Disappearing-message
 metadata and multi-device retries use the same outbound path for group alerts.
+
+Inside an enrolled group, current WhatsApp administrators may use:
+
+```text
+/monitor list
+/monitor assign <existing-id>
+/monitor unassign <id>
+/monitor show <id>
+/monitor create
+/monitor confirm <code>
+/monitor cancel [code]
+/monitor enable <id>
+/monitor disable <id>
+/monitor brief <id>
+```
+
+All scope is implicit: no group ID is accepted in these commands. Listing and
+governance are limited to monitors assigned to the current group. Creation is
+automatically routed only to that group. Enable/disable controls only that
+group's delivery and cannot affect private recipients or another group. The
+relay refreshes WhatsApp metadata before authorization, so promotion or demotion
+of a group administrator changes access without editing relay configuration.
 
 Authenticate Codex under the same Unix account used by systemd:
 

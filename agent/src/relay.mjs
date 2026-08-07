@@ -419,26 +419,137 @@ function isAdministrator(msg) {
   ));
 }
 
+function isGroupAdministrator(msg, metadata) {
+  const jids = new Set([
+    msg.key.participantAlt,
+    msg.key.participant,
+  ].filter(Boolean));
+  const identities = new Set(senderIdentities(msg));
+  return (metadata?.participants ?? []).some((participant) => {
+    if (!participant.admin && !participant.isAdmin && !participant.isSuperAdmin) return false;
+    const aliases = [participant.id, participant.jid, participant.lid].filter(Boolean);
+    return aliases.some((alias) => jids.has(alias)
+      || identities.has(normalizeNumber(alias.split("@")[0])));
+  });
+}
+
+function groupMonitorList(groupId) {
+  const monitors = monitorRuntime.config().monitors.filter((monitor) => (
+    groupRegistry.isAssigned(monitor.id, groupId)
+  ));
+  if (!monitors.length) return "Nessun monitor assegnato a questo gruppo.";
+  return monitors.map((monitor) => {
+    const enabled = groupRegistry.monitorEnabled(monitor.id, groupId);
+    return `${enabled ? "🟢" : "⏸️"} ${monitor.id} — ${monitor.name ?? monitor.id}`;
+  }).join("\n");
+}
+
+async function sendGroupReply(sock, msg, text) {
+  await sock.sendMessage(msg.key.remoteJid, { text }, { quoted: msg });
+}
+
 async function handleGroupMessage(sock, msg) {
   const jid = msg.key.remoteJid;
   const text = messageText(msg);
   const pairing = text.match(/^\/group-pair\s+([A-F0-9]{8})$/i);
-  // Groups are passive alert sinks. Pairing is the sole accepted inbound
-  // operation and still requires a separately authorized relay administrator.
-  if (!pairing || !isAdministrator(msg)) return;
+  const registeredGroup = groupRegistry.findByJid(jid);
+  if (!pairing && !registeredGroup) return;
+  let metadata;
   try {
-    const metadata = await sock.groupMetadata(jid);
-    const enrolledBy = senderIdentities(msg)[0];
-    const group = groupRegistry.enroll({
-      code: pairing[1], jid, enrolledBy, subject: metadata?.subject,
-    });
-    await sock.sendMessage(jid, {
-      text: `Gruppo registrato come “${group.id}”. È un destinatario passivo: non accetta interrogazioni o comandi. Un amministratore può assegnargli monitor dalla chat privata.`,
-    }, { quoted: msg });
-    logger.info({ groupId: group.id }, "WhatsApp monitor group enrolled");
+    metadata = await sock.groupMetadata(jid);
   } catch (error) {
-    logger.warn({ error, jid }, "WhatsApp group enrollment failed");
-    await sock.sendMessage(jid, { text: `Associazione gruppo non riuscita: ${error.message}` }, { quoted: msg });
+    logger.warn({ error, jid }, "WhatsApp group metadata unavailable");
+    return;
+  }
+
+  if (pairing) {
+    // Initial enrollment still requires a globally authorized relay admin; a
+    // WhatsApp group role alone must not authorize an unknown group.
+    if (!isAdministrator(msg)) return;
+    try {
+      const group = groupRegistry.enroll({
+        code: pairing[1], jid, enrolledBy: senderIdentities(msg)[0], subject: metadata?.subject,
+      });
+      await sendGroupReply(sock, msg, `Gruppo registrato come “${group.id}”. Gli amministratori WhatsApp possono ora gestire esclusivamente i monitor assegnati a questo gruppo. Le interrogazioni live restano disabilitate.`);
+      logger.info({ groupId: group.id }, "WhatsApp monitor group enrolled");
+    } catch (error) {
+      logger.warn({ error, jid }, "WhatsApp group enrollment failed");
+      await sendGroupReply(sock, msg, `Associazione gruppo non riuscita: ${error.message}`);
+    }
+    return;
+  }
+
+  const group = registeredGroup;
+  if (!group || !isGroupAdministrator(msg, metadata) || !monitorCommandRuntime) return;
+  const owner = `group:${group.id}`;
+
+  try {
+    const continuation = await monitorCommandRuntime.continueWizard(owner, text);
+    if (continuation) {
+      await sendGroupReply(sock, msg, continuation);
+      return;
+    }
+
+    if (text === "/monitors" || /^\/monitor\s+list$/i.test(text)) {
+      await sendGroupReply(sock, msg, groupMonitorList(group.id));
+      return;
+    }
+
+    const assignment = text.match(/^\/monitor\s+(assign|unassign)\s+(\S+)$/i);
+    if (assignment) {
+      const [, action, monitorId] = assignment;
+      if (!monitorRuntime.config().monitors.some((monitor) => monitor.id === monitorId)) {
+        await sendGroupReply(sock, msg, `Monitor ${monitorId} non trovato.`);
+        return;
+      }
+      groupRegistry.assign(monitorId, group.id, action.toLowerCase() === "assign");
+      await sendGroupReply(sock, msg, `Monitor ${monitorId} ${action.toLowerCase() === "assign" ? "assegnato a" : "disassegnato da"} questo gruppo.`);
+      return;
+    }
+
+    const scoped = text.match(/^\/(?:brief\s+|monitor\s+(?:show|enable|disable|brief)\s+)(\S+)$/i);
+    if (scoped && !groupRegistry.isAssigned(scoped[1], group.id)) {
+      await sendGroupReply(sock, msg, `Monitor ${scoped[1]} non assegnato a questo gruppo.`);
+      return;
+    }
+
+    const toggle = text.match(/^\/monitor\s+(enable|disable)\s+(\S+)$/i);
+    if (toggle) {
+      const enabled = toggle[1].toLowerCase() === "enable";
+      groupRegistry.setMonitorEnabled(toggle[2], group.id, enabled);
+      await sendGroupReply(sock, msg, `Monitor ${toggle[2]} ${enabled ? "attivato" : "sospeso"} per questo gruppo. Gli altri destinatari non sono stati modificati.`);
+      return;
+    }
+
+    const brief = text.match(/^\/(?:brief|monitor\s+brief)\s+(\S+)$/i);
+    if (brief) {
+      const result = await monitorRuntime.run(brief[1], { force: true, notify: false, persist: false });
+      result.triggered = result.current;
+      const monitor = monitorRuntime.config().monitors.find((item) => item.id === brief[1]);
+      await sendGroupReply(sock, msg, await analyzeMonitor(monitor, result));
+      return;
+    }
+
+    if (/^\/monitor\s+show\s+\S+$/i.test(text)
+        || /^\/monitor\s+(?:create|confirm|cancel)(?:\s|$)/i.test(text)) {
+      const command = await monitorCommandRuntime.handle(text, {
+        owner,
+        isAdmin: true,
+        context: {
+          groupId: group.id,
+          notification: { cooldownMinutes: 30, targets: [] },
+        },
+      });
+      if (command.handled) await sendGroupReply(sock, msg, command.reply);
+      return;
+    }
+
+    if (text === "/help" || /^\/monitor(?:\s|$)/i.test(text)) {
+      await sendGroupReply(sock, msg, "Comandi amministratori del gruppo: /monitor list, /monitor assign <id>, /monitor unassign <id>, /monitor show <id>, /monitor create, /monitor confirm <codice>, /monitor cancel [codice], /monitor enable|disable <id>, /monitor brief <id>. Le interrogazioni live non sono abilitate.");
+    }
+  } catch (error) {
+    logger.error({ error, groupId: group.id }, "group monitor command failed");
+    await sendGroupReply(sock, msg, `Comando monitor non riuscito: ${error.message}`);
   }
 }
 
@@ -679,6 +790,9 @@ async function connect() {
           monitorRuntime,
           stateFile: monitorCommandsFile,
           geocoderUrl: process.env.WWV_AGENT_GEOCODER_URL,
+          onMonitorAdded: async (monitor, context) => {
+            if (context.groupId) groupRegistry.assign(monitor.id, context.groupId, true);
+          },
         });
       } else {
         monitorRuntime.notify = (monitor, text) => notifyMonitor(sock, monitor, text);
