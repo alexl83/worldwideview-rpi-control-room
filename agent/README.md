@@ -110,11 +110,14 @@ and `/group enable|disable <group-id>`.
 4. Back in the private chat, use `/group list` to obtain the local group ID and
    `/group assign <monitor-id> <group-id>` to route future alerts.
 
-Once enrolled, a current WhatsApp group administrator can work directly inside
-the group with `/monitor list`, `/monitor assign <id>`, `/monitor unassign <id>`,
+Once enrolled, a current WhatsApp group administrator whose phone number or LID
+is also present in `WWV_AGENT_ALLOWED_NUMBERS` or
+`WWV_AGENT_ALLOWED_IDENTITIES` can work directly inside the group with
+`/monitor list`, `/monitor assign <id>`, `/monitor unassign <id>`,
 `/monitor show <id>`, `/monitor create`, `/monitor confirm <code>`,
 `/monitor cancel`, `/monitor enable|disable <id>` and `/monitor brief <id>`.
-Non-administrators and non-command messages are ignored. Group `enable` and
+Group administrators absent from the relay allow-list, non-administrators and
+non-command messages are ignored. Group `enable` and
 `disable` alter delivery only for that group; they do not pause the monitor for
 private contacts or other groups. A monitor created in a group is automatically
 assigned exclusively to that group and has no implicit private recipient.

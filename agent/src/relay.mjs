@@ -20,6 +20,7 @@ import { VoiceRuntime, audioMessage } from "./voice.mjs";
 import { parseEphemeralExpiration, sendOptionsFor } from "./whatsapp-send-options.mjs";
 import { GroupRegistry, isGroupJid } from "./group-registry.mjs";
 import { notificationTargets } from "./notification-targets.mjs";
+import { authorizeGroupOperator } from "./group-authorization.mjs";
 
 const mode = process.argv[2] ?? "run";
 const stateDir = process.env.WWV_AGENT_STATE_DIR ?? "/var/lib/wwv-agent";
@@ -419,20 +420,6 @@ function isAdministrator(msg) {
   ));
 }
 
-function isGroupAdministrator(msg, metadata) {
-  const jids = new Set([
-    msg.key.participantAlt,
-    msg.key.participant,
-  ].filter(Boolean));
-  const identities = new Set(senderIdentities(msg));
-  return (metadata?.participants ?? []).some((participant) => {
-    if (!participant.admin && !participant.isAdmin && !participant.isSuperAdmin) return false;
-    const aliases = [participant.id, participant.jid, participant.lid].filter(Boolean);
-    return aliases.some((alias) => jids.has(alias)
-      || identities.has(normalizeNumber(alias.split("@")[0])));
-  });
-}
-
 function groupMonitorList(groupId) {
   const monitors = monitorRuntime.config().monitors.filter((monitor) => (
     groupRegistry.isAssigned(monitor.id, groupId)
@@ -480,7 +467,9 @@ async function handleGroupMessage(sock, msg) {
   }
 
   const group = registeredGroup;
-  if (!group || !isGroupAdministrator(msg, metadata) || !monitorCommandRuntime) return;
+  if (!group
+      || !authorizeGroupOperator(msg, metadata, allowedNumbers, allowedIdentities)
+      || !monitorCommandRuntime) return;
   const owner = `group:${group.id}`;
 
   try {

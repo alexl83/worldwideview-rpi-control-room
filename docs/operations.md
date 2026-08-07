@@ -143,7 +143,9 @@ Monitor configuration may use typed `notification.targets` with `phone` and
 assignments are additive and preserve private recipients. Disappearing-message
 metadata and multi-device retries use the same outbound path for group alerts.
 
-Inside an enrolled group, current WhatsApp administrators may use:
+Inside an enrolled group, current WhatsApp administrators may use the following
+commands only when their phone number or LID is also in the relay's operator
+allow-list:
 
 ```text
 /monitor list
@@ -162,8 +164,10 @@ All scope is implicit: no group ID is accepted in these commands. Listing and
 governance are limited to monitors assigned to the current group. Creation is
 automatically routed only to that group. Enable/disable controls only that
 group's delivery and cannot affect private recipients or another group. The
-relay refreshes WhatsApp metadata before authorization, so promotion or demotion
-of a group administrator changes access without editing relay configuration.
+relay refreshes WhatsApp metadata before authorization, so promotion or
+demotion changes access immediately. Both checks are mandatory: membership in
+`WWV_AGENT_ALLOWED_NUMBERS` or `WWV_AGENT_ALLOWED_IDENTITIES` does not replace
+the WhatsApp administrator role, and that role does not replace the allow-list.
 
 Authenticate Codex under the same Unix account used by systemd:
 
