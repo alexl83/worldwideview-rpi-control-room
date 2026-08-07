@@ -6,6 +6,16 @@ function senderAliases(msg) {
   return [msg?.key?.participantAlt, msg?.key?.participant].filter(Boolean);
 }
 
+export function isGroupMember(msg, metadata) {
+  const aliases = senderAliases(msg);
+  const identities = new Set(aliases.map(normalize).filter(Boolean));
+  const exact = new Set(aliases);
+  return (metadata?.participants ?? []).some((participant) => (
+    [participant.id, participant.jid, participant.lid].filter(Boolean)
+      .some((alias) => exact.has(alias) || identities.has(normalize(alias)))
+  ));
+}
+
 export function authorizeGroupOperator(msg, metadata, allowedNumbers, allowedIdentities) {
   const aliases = senderAliases(msg);
   const identities = new Set(aliases.map(normalize).filter(Boolean));

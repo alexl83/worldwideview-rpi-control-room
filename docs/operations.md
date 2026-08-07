@@ -169,6 +169,20 @@ demotion changes access immediately. Both checks are mandatory: membership in
 `WWV_AGENT_ALLOWED_NUMBERS` or `WWV_AGENT_ALLOWED_IDENTITIES` does not replace
 the WhatsApp administrator role, and that role does not replace the allow-list.
 
+Ordinary current members have a narrower read-only surface and do not need to be
+in the relay allow-list:
+
+```text
+/monitor list
+/monitor brief <active-id>
+/brief <active-id>
+```
+
+The list excludes monitors that are globally disabled or suspended for this
+group. A brief is rejected unless the requested monitor is both assigned and
+active for the current group. Brief generation is serialized per group to avoid
+duplicate concurrent analyses. No other member message reaches Codex or WWV.
+
 Authenticate Codex under the same Unix account used by systemd:
 
 ```bash

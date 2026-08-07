@@ -116,11 +116,19 @@ is also present in `WWV_AGENT_ALLOWED_NUMBERS` or
 `/monitor list`, `/monitor assign <id>`, `/monitor unassign <id>`,
 `/monitor show <id>`, `/monitor create`, `/monitor confirm <code>`,
 `/monitor cancel`, `/monitor enable|disable <id>` and `/monitor brief <id>`.
-Group administrators absent from the relay allow-list, non-administrators and
-non-command messages are ignored. Group `enable` and
+Group administrators absent from the relay allow-list and ordinary members are
+limited to the read-only commands documented below; non-command messages are
+ignored. Group `enable` and
 `disable` alter delivery only for that group; they do not pause the monitor for
 private contacts or other groups. A monitor created in a group is automatically
 assigned exclusively to that group and has no implicit private recipient.
+
+Every current member of an enrolled group, without requiring the relay operator
+allow-list, has two read-only commands: `/monitor list` shows only active
+monitors assigned to that group, and `/monitor brief <id>` (or `/brief <id>`)
+produces a fresh brief only for one of those active monitors. Briefs are
+serialized per group. Membership does not grant any mutation, Codex chat or
+globe-control capability.
 
 Pairing codes are random, single-use and expire after ten minutes. Assignment is
 additive: existing private recipients keep receiving alerts. `/group disable`

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { authorizeGroupOperator } from "../src/group-authorization.mjs";
+import { authorizeGroupOperator, isGroupMember } from "../src/group-authorization.mjs";
 
 const message = {
   key: {
@@ -18,12 +18,24 @@ const metadata = {
 };
 
 test("requires both WhatsApp group admin role and relay allow-list", () => {
+  assert.equal(isGroupMember(message, metadata), true);
   assert.equal(authorizeGroupOperator(message, metadata, new Set(["39111222333"]), new Set()), true);
   assert.equal(authorizeGroupOperator(message, metadata, new Set(), new Set(["123456789012345"])), true);
   assert.equal(authorizeGroupOperator(message, metadata, new Set(), new Set()), false);
   assert.equal(authorizeGroupOperator(message, {
     participants: [{ ...metadata.participants[0], admin: null }],
   }, new Set(["39111222333"]), new Set()), false);
+});
+
+test("ordinary group members are recognized without becoming operators", () => {
+  const memberMetadata = {
+    participants: [{ ...metadata.participants[0], admin: null }],
+  };
+  assert.equal(isGroupMember(message, memberMetadata), true);
+  assert.equal(authorizeGroupOperator(
+    message, memberMetadata, new Set(["39111222333"]), new Set(),
+  ), false);
+  assert.equal(isGroupMember(message, { participants: [] }), false);
 });
 
 test("an allow-listed member cannot borrow another participant's admin role", () => {

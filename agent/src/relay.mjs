@@ -20,7 +20,7 @@ import { VoiceRuntime, audioMessage } from "./voice.mjs";
 import { parseEphemeralExpiration, sendOptionsFor } from "./whatsapp-send-options.mjs";
 import { GroupRegistry, isGroupJid } from "./group-registry.mjs";
 import { notificationTargets } from "./notification-targets.mjs";
-import { authorizeGroupOperator } from "./group-authorization.mjs";
+import { authorizeGroupOperator, isGroupMember } from "./group-authorization.mjs";
 
 const mode = process.argv[2] ?? "run";
 const stateDir = process.env.WWV_AGENT_STATE_DIR ?? "/var/lib/wwv-agent";
@@ -420,13 +420,19 @@ function isAdministrator(msg) {
   ));
 }
 
-function groupMonitorList(groupId) {
+function groupMonitorList(groupId, { activeOnly = false } = {}) {
+  const runtimeStatus = new Map(monitorRuntime.list().map((monitor) => [monitor.id, monitor]));
   const monitors = monitorRuntime.config().monitors.filter((monitor) => (
     groupRegistry.isAssigned(monitor.id, groupId)
+    && (!activeOnly || (runtimeStatus.get(monitor.id)?.enabled
+      && groupRegistry.monitorEnabled(monitor.id, groupId)))
   ));
-  if (!monitors.length) return "Nessun monitor assegnato a questo gruppo.";
+  if (!monitors.length) return activeOnly
+    ? "Nessun monitor attivo assegnato a questo gruppo."
+    : "Nessun monitor assegnato a questo gruppo.";
   return monitors.map((monitor) => {
-    const enabled = groupRegistry.monitorEnabled(monitor.id, groupId);
+    const enabled = runtimeStatus.get(monitor.id)?.enabled
+      && groupRegistry.monitorEnabled(monitor.id, groupId);
     return `${enabled ? "🟢" : "⏸️"} ${monitor.id} — ${monitor.name ?? monitor.id}`;
   }).join("\n");
 }
@@ -467,20 +473,57 @@ async function handleGroupMessage(sock, msg) {
   }
 
   const group = registeredGroup;
-  if (!group
-      || !authorizeGroupOperator(msg, metadata, allowedNumbers, allowedIdentities)
-      || !monitorCommandRuntime) return;
+  if (!group || !isGroupMember(msg, metadata) || !monitorCommandRuntime) return;
+  const groupOperator = authorizeGroupOperator(
+    msg, metadata, allowedNumbers, allowedIdentities,
+  );
   const owner = `group:${group.id}`;
 
   try {
-    const continuation = await monitorCommandRuntime.continueWizard(owner, text);
-    if (continuation) {
-      await sendGroupReply(sock, msg, continuation);
+    if (text === "/monitors" || /^\/monitor\s+list$/i.test(text)) {
+      await sendGroupReply(sock, msg, groupMonitorList(group.id, { activeOnly: !groupOperator }));
       return;
     }
 
-    if (text === "/monitors" || /^\/monitor\s+list$/i.test(text)) {
-      await sendGroupReply(sock, msg, groupMonitorList(group.id));
+    const readOnlyBrief = text.match(/^\/(?:brief|monitor\s+brief)\s+(\S+)$/i);
+    if (readOnlyBrief) {
+      const monitorId = readOnlyBrief[1];
+      const runtimeMonitor = monitorRuntime.list().find((item) => item.id === monitorId);
+      const available = groupRegistry.isAssigned(monitorId, group.id)
+        && groupRegistry.monitorEnabled(monitorId, group.id)
+        && runtimeMonitor?.enabled;
+      if (!available) {
+        await sendGroupReply(sock, msg, `Monitor ${monitorId} non attivo in questo gruppo.`);
+        return;
+      }
+      if (active.has(jid)) {
+        await sendGroupReply(sock, msg, "Un brief è già in elaborazione per questo gruppo.");
+        return;
+      }
+      active.add(jid);
+      try {
+        const result = await monitorRuntime.run(monitorId, { force: true, notify: false, persist: false });
+        result.triggered = result.current;
+        const monitor = monitorRuntime.config().monitors.find((item) => item.id === monitorId);
+        await sendGroupReply(sock, msg, await analyzeMonitor(monitor, result));
+      } finally {
+        active.delete(jid);
+      }
+      return;
+    }
+
+    if (text === "/help" && !groupOperator) {
+      await sendGroupReply(sock, msg, "Comandi disponibili: /monitor list, /monitor brief <id> (oppure /brief <id>). Sono visibili e interrogabili soltanto i monitor attivi assegnati a questo gruppo.");
+      return;
+    }
+
+    // Mutating commands require both the current WhatsApp group-admin role and
+    // a phone number or LID in the relay operator allow-list.
+    if (!groupOperator) return;
+
+    const continuation = await monitorCommandRuntime.continueWizard(owner, text);
+    if (continuation) {
+      await sendGroupReply(sock, msg, continuation);
       return;
     }
 
@@ -507,15 +550,6 @@ async function handleGroupMessage(sock, msg) {
       const enabled = toggle[1].toLowerCase() === "enable";
       groupRegistry.setMonitorEnabled(toggle[2], group.id, enabled);
       await sendGroupReply(sock, msg, `Monitor ${toggle[2]} ${enabled ? "attivato" : "sospeso"} per questo gruppo. Gli altri destinatari non sono stati modificati.`);
-      return;
-    }
-
-    const brief = text.match(/^\/(?:brief|monitor\s+brief)\s+(\S+)$/i);
-    if (brief) {
-      const result = await monitorRuntime.run(brief[1], { force: true, notify: false, persist: false });
-      result.triggered = result.current;
-      const monitor = monitorRuntime.config().monitors.find((item) => item.id === brief[1]);
-      await sendGroupReply(sock, msg, await analyzeMonitor(monitor, result));
       return;
     }
 
