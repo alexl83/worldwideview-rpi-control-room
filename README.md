@@ -57,6 +57,8 @@ remain in root-owned environment files on the Pi.
 - `config/`: secret-free configuration examples and Codex/WWV agent guidance.
 - `patches/`: upstream issues and the fixes used by this deployment.
 - `seeders/`: local data adapters missing from the stock self-hosted engine.
+- [`CHANGELOG.md`](CHANGELOG.md): dated operational milestones and notable
+  security, compatibility and feature changes.
 
 ## Prerequisites
 
