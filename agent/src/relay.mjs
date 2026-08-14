@@ -794,7 +794,15 @@ async function connect() {
         reconnectTimer = undefined;
       }
       logger.info("WhatsApp connected");
-      processResendRequest(sock).catch((error) => logger.error({ error }, "cached WhatsApp resend failed"));
+      // Baileys v7 opens the transport before initial sync and LID session
+      // creation have necessarily completed. A resend attempted in that gap
+      // can fail even though the socket already reports `open`.
+      setTimeout(() => {
+        if (generation !== socketGeneration) return;
+        processResendRequest(sock).catch((error) => (
+          logger.error({ err: error }, "cached WhatsApp resend failed")
+        ));
+      }, 25_000);
       if (!monitorRuntime) {
         try {
           fs.accessSync(monitorsFile, fs.constants.R_OK);

@@ -64,6 +64,15 @@ generation guard prevents overlapping reconnect loops. The cache is mode `0600`
 and contains message content, so treat it with the same sensitivity as WhatsApp
 linked-device state.
 
+The relay pins Baileys `7.0.0-rc14`. Version 7 persists WhatsApp's PN/LID
+mappings and device lists in the existing multi-file authentication directory;
+these records are required for reliable delivery to modern accounts and companion
+devices. Do not downgrade a migrated deployment to the old 6.7.x state in place.
+Before upgrading, archive `/var/lib/wwv-agent/whatsapp-auth` and the outbound
+message cache. A manual cached-message resend is delayed until initial sync and
+LID session creation have completed, because the transport can report `open`
+slightly earlier.
+
 Retry lookup is independent of the recipient identifier representation. It first
 matches the exact JID and message ID, then falls back to the stable message ID so
 that a retry arriving through WhatsApp's LID alias can recover a payload originally
