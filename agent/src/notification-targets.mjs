@@ -23,3 +23,20 @@ export function notificationTargets(monitor, { allowedNumbers, groups }) {
   }
   return [...result.values()];
 }
+
+export async function resolveNotificationJid(target, socket, logger) {
+  if (target?.type !== "phone" || !target.jid?.endsWith("@s.whatsapp.net")) {
+    return target?.jid;
+  }
+
+  try {
+    const lid = await socket?.signalRepository?.lidMapping?.getLIDForPN?.(target.jid);
+    if (typeof lid === "string" && (lid.endsWith("@lid") || lid.endsWith("@hosted.lid"))) {
+      return lid;
+    }
+  } catch (error) {
+    logger?.warn?.({ err: error }, "WhatsApp notification LID resolution failed; using phone JID");
+  }
+
+  return target.jid;
+}

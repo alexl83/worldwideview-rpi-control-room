@@ -9,6 +9,14 @@ date on which each operational milestone reached `main`.
 
 ## [Unreleased]
 
+### Fixed
+
+- Resolve phone-number monitor recipients through Baileys' persisted PN→LID
+  mapping before delivery. Configuration and authorization continue to use stable
+  phone numbers, while proactive alerts use the recipient's current cryptographic
+  address and avoid cross-JID retry placeholders. Administrative text resends use
+  the same resolution path.
+
 ### Planned
 
 - Stable enrollment of third-party WhatsApp users, binding an observed LID to an

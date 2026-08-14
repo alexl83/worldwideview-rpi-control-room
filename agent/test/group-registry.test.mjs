@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { GroupRegistry } from "../src/group-registry.mjs";
-import { notificationTargets } from "../src/notification-targets.mjs";
+import { notificationTargets, resolveNotificationJid } from "../src/notification-targets.mjs";
 
 function fixture() {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "wwv-groups-"));
@@ -55,4 +55,32 @@ test("typed and assigned targets preserve phone allow-list and group policy", ()
     id: "silent",
     notification: { targets: [] },
   }, { allowedNumbers: new Set(["39111"]), groups: registry }), []);
+});
+
+test("resolves phone notification targets to LIDs while preserving groups", async () => {
+  const socket = {
+    signalRepository: {
+      lidMapping: {
+        getLIDForPN: async (jid) => {
+          assert.equal(jid, "39111@s.whatsapp.net");
+          return "12345678901234@lid";
+        },
+      },
+    },
+  };
+  assert.equal(await resolveNotificationJid({
+    type: "phone", jid: "39111@s.whatsapp.net",
+  }, socket), "12345678901234@lid");
+  assert.equal(await resolveNotificationJid({
+    type: "group", jid: "120363012345678901@g.us",
+  }, socket), "120363012345678901@g.us");
+});
+
+test("falls back to the phone JID when no LID mapping is available", async () => {
+  const socket = {
+    signalRepository: { lidMapping: { getLIDForPN: async () => null } },
+  };
+  assert.equal(await resolveNotificationJid({
+    type: "phone", jid: "39111@s.whatsapp.net",
+  }, socket), "39111@s.whatsapp.net");
 });

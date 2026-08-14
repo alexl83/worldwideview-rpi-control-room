@@ -19,7 +19,7 @@ import { findOutboundEntry, outboundKey } from "./outbound-cache.mjs";
 import { VoiceRuntime, audioMessage } from "./voice.mjs";
 import { parseEphemeralExpiration, sendOptionsFor } from "./whatsapp-send-options.mjs";
 import { GroupRegistry, isGroupJid } from "./group-registry.mjs";
-import { notificationTargets } from "./notification-targets.mjs";
+import { notificationTargets, resolveNotificationJid } from "./notification-targets.mjs";
 import { authorizeGroupOperator, isGroupMember } from "./group-authorization.mjs";
 
 const mode = process.argv[2] ?? "run";
@@ -178,7 +178,8 @@ async function processResendRequest(sock) {
     ?? message.imageMessage?.caption
     ?? message.videoMessage?.caption;
   if (!text) throw new Error(`cached WhatsApp message ${messageId} is not text-resendable`);
-  const sent = await sock.sendMessage(remoteJid, { text });
+  const deliveryJid = await resolveNotificationJid({ type: "phone", jid: remoteJid }, sock, logger);
+  const sent = await sock.sendMessage(deliveryJid, { text });
   fs.unlinkSync(resendRequestFile);
   logger.info({ originalMessageId: messageId, newMessageId: sent?.key?.id }, "resent cached WhatsApp message");
 }
@@ -399,8 +400,9 @@ async function analyzeMonitor(monitor, result) {
 async function notifyMonitor(sock, monitor, text) {
   const targets = notificationTargets(monitor, { allowedNumbers, groups: groupRegistry });
   for (const target of targets) {
+    const deliveryJid = await resolveNotificationJid(target, sock, logger);
     for (const chunk of splitText(text)) {
-      await sock.sendMessage(target.jid, { text: chunk });
+      await sock.sendMessage(deliveryJid, { text: chunk });
     }
   }
 }
