@@ -16,6 +16,11 @@ sudo WWV_USER="$USER" ./scripts/install-rpi.sh
 Review `/etc/wwv-agent.env` and `/etc/wwv-headless.env`. The WhatsApp allow-list is
 comma-separated E.164 digits without `+`, spaces or punctuation.
 
+`WWV_AGENT_MAX_SESSION_TURNS` controls automatic Codex conversation rotation and
+defaults to `30`. Lower it when prompts or MCP results are unusually large. The
+relay also discards a conversation automatically after a Codex timeout, so the
+next request cannot resume the same stalled history.
+
 Keep real telephone numbers in `WWV_AGENT_ALLOWED_NUMBERS`. Some WhatsApp
 accounts arrive from Baileys under an opaque LID and occasionally omit the
 phone-number alias; authorize such an observed identity separately through

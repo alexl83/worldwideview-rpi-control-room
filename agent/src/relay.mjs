@@ -42,11 +42,13 @@ const headlessSessionId = process.env.WWV_AGENT_HEADLESS_SESSION_ID ?? "";
 const workspace = process.env.WWV_AGENT_WORKSPACE ?? "/srv/worldwideview";
 const maxChars = Number(process.env.WWV_AGENT_MAX_MESSAGE_CHARS ?? 12000);
 const timeoutMs = Number(process.env.WWV_AGENT_TIMEOUT_MS ?? 600000);
+const maxSessionTurns = Number(process.env.WWV_AGENT_MAX_SESSION_TURNS ?? 30);
 const ephemeralExpiration = parseEphemeralExpiration(
   process.env.WWV_AGENT_EPHEMERAL_EXPIRATION_SECONDS,
 );
 const model = process.env.WWV_AGENT_MODEL?.trim();
 const logger = pino({ level: process.env.LOG_LEVEL ?? "info" });
+const CODEX_TIMEOUT = "CODEX_TIMEOUT";
 const voiceRuntime = new VoiceRuntime({
   logger,
   whisperPath: process.env.WWV_AGENT_WHISPER_PATH ?? "/opt/wwv-voice/whisper/whisper-cli",
@@ -114,6 +116,30 @@ function saveSessions(sessions) {
   const tmp = `${sessionsFile}.tmp`;
   fs.writeFileSync(tmp, `${JSON.stringify(sessions, null, 2)}\n`, { mode: 0o600 });
   fs.renameSync(tmp, sessionsFile);
+}
+
+function discardTimedOutSession(sessions, key, error) {
+  if (error?.code !== CODEX_TIMEOUT || !sessions[key]) return false;
+  delete sessions[key];
+  saveSessions(sessions);
+  logger.warn({ key }, "discarded Codex session after timeout");
+  return true;
+}
+
+function resumableSession(session) {
+  if (!session?.threadId) return null;
+  const turnCount = Number(session.turnCount);
+  if (!Number.isInteger(turnCount) || turnCount < 0 || turnCount >= maxSessionTurns) return null;
+  return session;
+}
+
+function persistedSession(result, resumed) {
+  return {
+    threadId: result.threadId,
+    turnCount: resumed ? resumed.turnCount + 1 : 1,
+    startedAt: resumed?.startedAt ?? new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
 }
 
 function loadOutboundMessages() {
@@ -286,7 +312,9 @@ async function runCodex(threadId, prompt, options = {}) {
     });
     child.on("close", (code) => {
       if (timedOut) {
-        finish(() => reject(new Error(`Codex non ha concluso entro ${timeoutMs / 1000}s`)));
+        const error = new Error(`Codex non ha concluso entro ${timeoutMs / 1000}s`);
+        error.code = CODEX_TIMEOUT;
+        finish(() => reject(error));
       } else if (code === 0) {
         finish(() => resolve({ threadId: newThreadId, text: finalText }));
       } else {
@@ -342,14 +370,15 @@ async function handleFrontendChat(request, response) {
       "",
       prompt,
     ].join("\n");
-    const result = await runCodex(sessions[key]?.threadId, pinnedPrompt, { sessionId });
+    const resumed = resumableSession(sessions[key]);
+    const result = await runCodex(resumed?.threadId, pinnedPrompt, { sessionId });
     if (result.threadId) {
-      sessions[key] = { threadId: result.threadId, updatedAt: new Date().toISOString() };
+      sessions[key] = persistedSession(result, resumed);
       saveSessions(sessions);
     }
     sendJson(response, 200, { text: result.text, threadId: result.threadId });
   } catch (error) {
-    logger.error({ error }, "frontend chat failed");
+    logger.error({ err: error }, "frontend chat failed");
     sendJson(response, 500, { error: error.message });
   }
 }
@@ -735,9 +764,10 @@ async function handleMessage(sock, msg) {
       "",
       text,
     ].join("\n");
-    const result = await runCodex(sessions[jid]?.threadId, pinnedPrompt, { sessionId: headlessSessionId });
+    const resumed = resumableSession(sessions[jid]);
+    const result = await runCodex(resumed?.threadId, pinnedPrompt, { sessionId: headlessSessionId });
     if (result.threadId) {
-      sessions[jid] = { threadId: result.threadId, updatedAt: new Date().toISOString() };
+      sessions[jid] = persistedSession(result, resumed);
       saveSessions(sessions);
     }
     for (const chunk of splitText(result.text)) await sock.sendMessage(jid, { text: chunk });
@@ -759,7 +789,11 @@ async function handleMessage(sock, msg) {
     await sock.sendMessage(jid, { react: { text: "✅", key: msg.key } });
   } catch (error) {
     logger.error({ err: error, jid }, "Codex turn failed");
-    await sock.sendMessage(jid, { text: `Errore Codex: ${error.message}` });
+    const sessionDiscarded = discardTimedOutSession(sessions, jid, error);
+    const recovery = sessionDiscarded
+      ? " La sessione bloccata è stata eliminata automaticamente: ripeti la richiesta e partirà in una sessione nuova."
+      : "";
+    await sock.sendMessage(jid, { text: `Errore Codex: ${error.message}.${recovery}` });
     await sock.sendMessage(jid, { react: { text: "❌", key: msg.key } });
   } finally {
     active.delete(jid);

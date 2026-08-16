@@ -15,6 +15,12 @@ date on which each operational milestone reached `main`.
   interrupts the complete tree and escalates to `SIGKILL` after five seconds,
   preventing orphaned native Codex and code-mode-host processes. `/status`
   remains available during a long turn and reports whether a request is active.
+- Discard a persisted WhatsApp Codex thread when one of its turns times out. This
+  prevents every later request from resuming the same stalled conversation; the
+  timeout reply explicitly tells the operator that the next request starts clean.
+- Rotate Codex conversations after 30 successful turns by default (configurable
+  with `WWV_AGENT_MAX_SESSION_TURNS`). Legacy session records are rotated once on
+  first use, preventing multi-megabyte histories from stalling `codex resume`.
 - Resolve phone-number monitor recipients through Baileys' persisted PN→LID
   mapping before delivery. Configuration and authorization continue to use stable
   phone numbers, while proactive alerts use the recipient's current cryptographic

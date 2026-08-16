@@ -10,6 +10,13 @@ the WorldwideView MCP entry in the service user's Codex configuration. WhatsApp
 turns are always pinned to the stable headless globe through Caddy's loopback MCP
 alias; they never select or control an operator's interactive tab.
 
+Conversation continuity is bounded: `WWV_AGENT_MAX_SESSION_TURNS` defaults to
+30 successful turns, after which the next request transparently starts a fresh
+Codex thread. A timed-out thread is discarded immediately. This retains useful
+short-term context without allowing multi-megabyte `codex resume` histories to
+stall every subsequent WhatsApp request. `/new` remains available for a manual
+reset.
+
 Telephone-number authorization and opaque WhatsApp identity authorization are
 kept separate. `WWV_AGENT_ALLOWED_NUMBERS` contains E.164 phone numbers and is
 also the source for default monitor recipients. `WWV_AGENT_ALLOWED_IDENTITIES`
