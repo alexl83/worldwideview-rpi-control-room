@@ -21,6 +21,12 @@ defaults to `30`. Lower it when prompts or MCP results are unusually large. The
 relay also discards a conversation automatically after a Codex timeout, so the
 next request cannot resume the same stalled history.
 
+WhatsApp photos and image documents are forwarded to Codex when their MIME type
+is JPEG, PNG or WebP. `WWV_AGENT_IMAGE_MAX_BYTES` defaults to `15728640` (15 MB).
+Downloaded media lives only in a mode-`0600` temporary directory and is removed
+after the request. PDFs, arbitrary documents and videos are deliberately not
+forwarded by the current implementation.
+
 Keep real telephone numbers in `WWV_AGENT_ALLOWED_NUMBERS`. Some WhatsApp
 accounts arrive from Baileys under an opaque LID and occasionally omit the
 phone-number alias; authorize such an observed identity separately through

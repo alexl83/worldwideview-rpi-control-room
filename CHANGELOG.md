@@ -9,6 +9,13 @@ date on which each operational milestone reached `main`.
 
 ## [Unreleased]
 
+### Added
+
+- Forward authorized WhatsApp JPEG, PNG and WebP images to Codex, including
+  ephemeral, view-once and image-document wrappers. Media is size-limited,
+  written to a private temporary file for `codex --image`, and deleted after the
+  turn whether it succeeds or fails.
+
 ### Fixed
 
 - Run each Codex CLI turn in a dedicated process group. On timeout the relay now

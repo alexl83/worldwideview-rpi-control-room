@@ -54,6 +54,13 @@ WhatsApp voice notes are decoded and transcribed locally with Whisper. The relay
 sends the transcript, always sends the full text answer, and then synthesizes an
 Italian Opus reply with Piper. Written prompts never produce unsolicited audio.
 
+Authorized direct chats may attach JPEG, PNG or WebP images, either as photos or
+image documents. The relay downloads at most 15 MB by default, passes the private
+temporary file to Codex with `--image`, and removes it after the turn. Captions
+become the prompt; an image without a caption receives a generic analysis prompt.
+Configure the byte limit with `WWV_AGENT_IMAGE_MAX_BYTES`. Non-image documents
+and videos are not forwarded to Codex.
+
 User-visible relay messages can carry a configurable WhatsApp disappearing-message
 expiration. Set `WWV_AGENT_EPHEMERAL_EXPIRATION_SECONDS` to the desired lifetime
 in seconds (`0` disables it). This covers interactive text, voice responses and

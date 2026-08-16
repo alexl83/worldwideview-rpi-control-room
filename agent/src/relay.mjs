@@ -22,6 +22,7 @@ import { GroupRegistry, isGroupJid } from "./group-registry.mjs";
 import { notificationTargets, resolveNotificationJid } from "./notification-targets.mjs";
 import { authorizeGroupOperator, isGroupMember } from "./group-authorization.mjs";
 import { signalProcessTree } from "./codex-process.mjs";
+import { WhatsAppImageRuntime, imageMessage } from "./whatsapp-image.mjs";
 
 const mode = process.argv[2] ?? "run";
 const stateDir = process.env.WWV_AGENT_STATE_DIR ?? "/var/lib/wwv-agent";
@@ -59,6 +60,10 @@ const voiceRuntime = new VoiceRuntime({
   maxInputBytes: Number(process.env.WWV_AGENT_VOICE_MAX_BYTES ?? 12 * 1024 * 1024),
   maxDurationSeconds: Number(process.env.WWV_AGENT_VOICE_MAX_SECONDS ?? 180),
   maxSpeechChars: Number(process.env.WWV_AGENT_VOICE_MAX_SPEECH_CHARS ?? 4000),
+});
+const imageRuntime = new WhatsAppImageRuntime({
+  logger,
+  maxInputBytes: Number(process.env.WWV_AGENT_IMAGE_MAX_BYTES ?? 15 * 1024 * 1024),
 });
 const allowedNumbers = new Set(
   (process.env.WWV_AGENT_ALLOWED_NUMBERS ?? "")
@@ -212,15 +217,22 @@ async function processResendRequest(sock) {
 }
 
 function messageText(message) {
-  const content = message?.message;
-  if (!content) return "";
-  return (
-    content.conversation ??
-    content.extendedTextMessage?.text ??
-    content.imageMessage?.caption ??
-    content.videoMessage?.caption ??
-    ""
-  ).trim();
+  let content = message?.message;
+  for (let depth = 0; depth < 6 && content; depth += 1) {
+    const text = content.conversation
+      ?? content.extendedTextMessage?.text
+      ?? content.imageMessage?.caption
+      ?? content.videoMessage?.caption
+      ?? content.documentMessage?.caption;
+    if (text) return text.trim();
+    content = content.ephemeralMessage?.message
+      ?? content.viewOnceMessage?.message
+      ?? content.viewOnceMessageV2?.message
+      ?? content.documentWithCaptionMessage?.message
+      ?? content.editedMessage?.message
+      ?? content.associatedChildMessage?.message;
+  }
+  return "";
 }
 
 function splitText(text) {
@@ -236,9 +248,10 @@ function splitText(text) {
   return result.length ? result : ["Nessuna risposta prodotta."];
 }
 
-function codexArgs(threadId, prompt, { sessionId } = {}) {
+function codexArgs(threadId, prompt, { sessionId, imagePaths = [] } = {}) {
   const common = ["--json", "--skip-git-repo-check"];
   if (model) common.push("--model", model);
+  for (const imagePath of imagePaths) common.push("--image", imagePath);
   if (sessionId) {
     const url = sessionId === headlessSessionId
       ? "http://127.0.0.1:3080/mcp/headless"
@@ -678,8 +691,9 @@ async function handleMessage(sock, msg) {
   }
   const isAdmin = isAdministrator(msg);
   const voice = Boolean(audioMessage(msg));
+  const hasImage = Boolean(imageMessage(msg));
   let text = messageText(msg);
-  if (!text && !voice) return;
+  if (!text && !voice && !hasImage) return;
   if (text === "/status") {
     const sessions = loadSessions();
     await sock.sendMessage(jid, {
@@ -751,11 +765,17 @@ async function handleMessage(sock, msg) {
 
   active.add(jid);
   await sock.sendMessage(jid, { react: { text: "⏳", key: msg.key } });
+  let downloadedImage;
   try {
     if (voice) {
       text = await voiceRuntime.transcribe(msg, sock);
       logger.info({ jid, transcriptChars: text.length }, "WhatsApp voice note transcribed");
       await sock.sendMessage(jid, { text: `🎙️ Ho capito: “${text}”` });
+    }
+    if (hasImage) {
+      downloadedImage = await imageRuntime.download(msg, sock);
+      logger.info({ jid, mimeType: downloadedImage.mimeType, bytes: downloadedImage.size }, "WhatsApp image downloaded");
+      if (!text) text = "Analizza l’immagine allegata e descrivi ciò che è rilevante.";
     }
     const pinnedPrompt = [
       `Questa richiesta WhatsApp è rigidamente vincolata alla sessione WorldWideView headless ${headlessSessionId}.`,
@@ -765,7 +785,10 @@ async function handleMessage(sock, msg) {
       text,
     ].join("\n");
     const resumed = resumableSession(sessions[jid]);
-    const result = await runCodex(resumed?.threadId, pinnedPrompt, { sessionId: headlessSessionId });
+    const result = await runCodex(resumed?.threadId, pinnedPrompt, {
+      sessionId: headlessSessionId,
+      imagePaths: downloadedImage ? [downloadedImage.path] : [],
+    });
     if (result.threadId) {
       sessions[jid] = persistedSession(result, resumed);
       saveSessions(sessions);
@@ -796,6 +819,7 @@ async function handleMessage(sock, msg) {
     await sock.sendMessage(jid, { text: `Errore Codex: ${error.message}.${recovery}` });
     await sock.sendMessage(jid, { react: { text: "❌", key: msg.key } });
   } finally {
+    downloadedImage?.cleanup();
     active.delete(jid);
   }
 }
