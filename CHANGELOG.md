@@ -11,6 +11,10 @@ date on which each operational milestone reached `main`.
 
 ### Fixed
 
+- Run each Codex CLI turn in a dedicated process group. On timeout the relay now
+  interrupts the complete tree and escalates to `SIGKILL` after five seconds,
+  preventing orphaned native Codex and code-mode-host processes. `/status`
+  remains available during a long turn and reports whether a request is active.
 - Resolve phone-number monitor recipients through Baileys' persisted PN→LID
   mapping before delivery. Configuration and authorization continue to use stable
   phone numbers, while proactive alerts use the recipient's current cryptographic

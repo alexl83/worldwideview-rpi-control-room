@@ -21,6 +21,7 @@ import { parseEphemeralExpiration, sendOptionsFor } from "./whatsapp-send-option
 import { GroupRegistry, isGroupJid } from "./group-registry.mjs";
 import { notificationTargets, resolveNotificationJid } from "./notification-targets.mjs";
 import { authorizeGroupOperator, isGroupMember } from "./group-authorization.mjs";
+import { signalProcessTree } from "./codex-process.mjs";
 
 const mode = process.argv[2] ?? "run";
 const stateDir = process.env.WWV_AGENT_STATE_DIR ?? "/var/lib/wwv-agent";
@@ -236,14 +237,28 @@ async function runCodex(threadId, prompt, options = {}) {
       cwd: workspace,
       env: process.env,
       stdio: ["ignore", "pipe", "pipe"],
+      detached: process.platform !== "win32",
     });
     let buffer = "";
     let stderr = "";
     let newThreadId = threadId;
     let finalText = "";
+    let timedOut = false;
+    let forceKillTimer;
+    let settled = false;
+    const finish = (callback) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (forceKillTimer) clearTimeout(forceKillTimer);
+      callback();
+    };
     const timer = setTimeout(() => {
-      child.kill("SIGINT");
-      reject(new Error(`Codex non ha concluso entro ${timeoutMs / 1000}s`));
+      timedOut = true;
+      signalProcessTree(child, "SIGINT");
+      forceKillTimer = setTimeout(() => {
+        signalProcessTree(child, "SIGKILL");
+      }, 5_000);
     }, timeoutMs);
 
     child.stdout.setEncoding("utf8");
@@ -267,13 +282,16 @@ async function runCodex(threadId, prompt, options = {}) {
     child.stderr.setEncoding("utf8");
     child.stderr.on("data", (chunk) => { stderr += chunk; });
     child.on("error", (error) => {
-      clearTimeout(timer);
-      reject(error);
+      finish(() => reject(error));
     });
     child.on("close", (code) => {
-      clearTimeout(timer);
-      if (code === 0) resolve({ threadId: newThreadId, text: finalText });
-      else reject(new Error(stderr.trim() || `Codex terminato con codice ${code}`));
+      if (timedOut) {
+        finish(() => reject(new Error(`Codex non ha concluso entro ${timeoutMs / 1000}s`)));
+      } else if (code === 0) {
+        finish(() => resolve({ threadId: newThreadId, text: finalText }));
+      } else {
+        finish(() => reject(new Error(stderr.trim() || `Codex terminato con codice ${code}`)));
+      }
     });
   });
 }
@@ -633,6 +651,13 @@ async function handleMessage(sock, msg) {
   const voice = Boolean(audioMessage(msg));
   let text = messageText(msg);
   if (!text && !voice) return;
+  if (text === "/status") {
+    const sessions = loadSessions();
+    await sock.sendMessage(jid, {
+      text: `Relay attivo. Sessione: ${sessions[jid]?.threadId ?? "nuova"}. Globo: headless ${headlessSessionId.slice(0, 8)}. Sandbox: read-only. Voce: attiva. Monitor: ${monitorRuntime?.list().filter((item) => item.enabled).length ?? 0} attivi. Richiesta: ${active.has(jid) ? "in corso" : "nessuna"}.`,
+    });
+    return;
+  }
   if (active.has(jid)) {
     await sock.sendMessage(jid, { text: "Sto già elaborando una richiesta. Riprova quando ho concluso." });
     return;
@@ -657,12 +682,6 @@ async function handleMessage(sock, msg) {
     delete sessions[jid];
     saveSessions(sessions);
     await sock.sendMessage(jid, { text: "Nuova sessione Codex pronta." });
-    return;
-  }
-  if (text === "/status") {
-    await sock.sendMessage(jid, {
-      text: `Relay attivo. Sessione: ${sessions[jid]?.threadId ?? "nuova"}. Globo: headless ${headlessSessionId.slice(0, 8)}. Sandbox: read-only. Voce: attiva. Monitor: ${monitorRuntime?.list().filter((item) => item.enabled).length ?? 0} attivi.`,
-    });
     return;
   }
   if (isAdmin && text) {
@@ -739,7 +758,7 @@ async function handleMessage(sock, msg) {
     }
     await sock.sendMessage(jid, { react: { text: "✅", key: msg.key } });
   } catch (error) {
-    logger.error({ error, jid }, "Codex turn failed");
+    logger.error({ err: error, jid }, "Codex turn failed");
     await sock.sendMessage(jid, { text: `Errore Codex: ${error.message}` });
     await sock.sendMessage(jid, { react: { text: "❌", key: msg.key } });
   } finally {
