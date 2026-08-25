@@ -16,21 +16,6 @@ date on which each operational milestone reached `main`.
   written to a private temporary file for `codex --image`, and deleted after the
   turn whether it succeeds or fails.
 
-### Changed
-
-- Rebased the deployed WWV fork onto upstream `6a6f5403` (WWV 2.65.37) and
-  released the integrated fork as 2.65.38. The integration adopts upstream's
-  fixes for session creation, data-engine discovery and snapshot normalization,
-  entity selection, disabled-plugin bootstrap and command-stream reconnection,
-  while retaining the control-room frontend agent, Places API New support,
-  Map Tiles key verification and incremental ARM64 Docker layout.
-- Standardized server-side engine routing on upstream's
-  `WWV_DATA_ENGINE_URL`. The legacy `WWV_PLUGIN_DATA_ENGINE_URL` remains in the
-  Compose environment so the pre-integration rollback image still works.
-- Added dated rollback tags for both repositories before the upstream
-  integration (`rollback-2026-08-26`) and took a pre-migration PostgreSQL dump
-  before deploying the new image.
-
 ### Fixed
 
 - Run each Codex CLI turn in a dedicated process group. On timeout the relay now
@@ -55,6 +40,40 @@ date on which each operational milestone reached `main`.
   administrator-approved phone number without making LIDs notification targets.
 - Optional richer WhatsApp group support where it can preserve the existing
   group-scoped authorization model.
+
+## [2026-08-26] - Upstream WWV integration and rollback release
+
+### Added
+
+- Published `rollback-2026-08-26` in both the WWV fork and the control-room
+  repository before changing the deployed baseline.
+- Published the integrated WWV fork as `v2.65.38-control-room.1` at commit
+  `e7985f58`.
+- Created a compressed pre-migration PostgreSQL backup before deployment.
+
+### Changed
+
+- Rebased the deployed WWV fork onto upstream `6a6f5403` (WWV 2.65.37) and
+  released the integrated fork as 2.65.38. The integration adopts upstream's
+  fixes for session creation, data-engine discovery and snapshot normalization,
+  entity selection, disabled-plugin bootstrap and command-stream reconnection.
+- Retained the deployment-specific frontend agent, Places API New support, Map
+  Tiles key verification, no-cache application shell and incremental ARM64
+  Docker layer ordering.
+- Standardized server-side engine routing on upstream's
+  `WWV_DATA_ENGINE_URL`. The legacy `WWV_PLUGIN_DATA_ENGINE_URL` remains in the
+  Compose environment so the pre-integration rollback image still works.
+- Cross-compiled the production ARM64 image on the Mac and deployed it through
+  the incremental local-registry pipeline with automatic image rollback.
+
+### Verified
+
+- Passed the complete 1,384-test Vitest suite, lint with zero errors, the local
+  production build and the ARM64 container build.
+- Verified database migrations, HTTPS, Redis, PostgreSQL, the data engine, the
+  persistent headless globe and the local-agent relay after deployment.
+- Confirmed the complete application health response as `healthy` and recovered
+  Raspberry Pi free space from 4.2 GB to approximately 11 GB.
 
 ## [2026-08-14] - LID-aware WhatsApp delivery
 
@@ -172,6 +191,7 @@ date on which each operational milestone reached `main`.
   session that initiated the request.
 
 [Unreleased]: https://github.com/alexl83/worldwideview-rpi-control-room/compare/main...HEAD
+[2026-08-26]: https://github.com/alexl83/worldwideview-rpi-control-room/commits/main/?since=2026-08-26T00:00:00Z&until=2026-08-26T23:59:59Z
 [2026-08-14]: https://github.com/alexl83/worldwideview-rpi-control-room/commits/main/?since=2026-08-14T00:00:00Z&until=2026-08-14T23:59:59Z
 [2026-08-07]: https://github.com/alexl83/worldwideview-rpi-control-room/commits/main/?since=2026-08-07T00:00:00Z&until=2026-08-07T23:59:59Z
 [2026-08-05]: https://github.com/alexl83/worldwideview-rpi-control-room/commits/main/?since=2026-08-05T00:00:00Z&until=2026-08-05T23:59:59Z
