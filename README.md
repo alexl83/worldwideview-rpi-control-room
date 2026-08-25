@@ -22,9 +22,11 @@ WhatsApp -> Baileys relay -> Codex CLI -> WorldWideView MCP
 Mac/Colima -- ARM64 build -> local registry -- SSH tunnel -> Raspberry Pi
 ```
 
-LAN browsers enter through Caddy at `https://porpolino.local`. The WWV and data
-engine container ports stay on loopback; Caddy proxies the UI, engine stream,
-legacy Aviation API and a loopback-only MCP alias pinned to the headless globe.
+LAN browsers enter through Caddy at a locally chosen HTTPS hostname, such as
+`https://wwv-pi.local`. The WWV and data-engine container ports stay on
+loopback; Caddy proxies the UI, engine stream, legacy Aviation API and a
+loopback-only MCP alias pinned to the headless globe. Replace `wwv-pi.local` in
+the examples with the LAN or VPN DNS name assigned to your Raspberry Pi.
 
 No OpenAI API key is required: the service account authenticates the Codex CLI
 with an eligible ChatGPT subscription. WorldWideView and Google Maps credentials
@@ -55,7 +57,8 @@ remain in root-owned environment files on the Pi.
 - `scripts/`: Pi installer plus ARM64 cross-build/deploy with automatic rollback.
 - `systemd/`: hardened, boot-enabled service templates.
 - `config/`: secret-free configuration examples and Codex/WWV agent guidance.
-- `patches/`: upstream issues and the fixes used by this deployment.
+- `patches/`: canonical inventory that classifies each fix as supplied by
+  upstream, retained in the WWV fork, implemented by the control room or retired.
 - `seeders/`: local data adapters missing from the stock self-hosted engine.
 - [`CHANGELOG.md`](CHANGELOG.md): dated operational milestones and notable
   security, compatibility and feature changes.
@@ -67,8 +70,9 @@ Docker Engine with Compose v2, Node.js 22+, Chromium, Codex CLI, SSH access and 
 sudo-capable operator account.
 
 The WorldWideView source and the data-engine image are intentionally not
-vendored. Clone/build those upstream projects separately, then use this repo as
-the deployment and control plane.
+vendored. The reproducible reference release uses the public WWV fork tag
+`v2.65.38-control-room.1`; use that tag rather than replaying historical patches
+individually. This repository remains the deployment and control plane.
 
 The local Aviation seeder supplies the OpenSky endpoint expected by the official
 frontend plugin, which is absent from the stock self-hosted seeder set. Anonymous
@@ -79,7 +83,14 @@ set `OPENSKY_CLIENT_ID` and `OPENSKY_CLIENT_SECRET` in
 
 ## Quick start
 
-1. Clone this repository and WorldWideView on the Mac.
+1. Clone this repository and the tagged WWV fork on the Mac:
+
+   ```bash
+   git clone https://github.com/alexl83/worldwideview-rpi-control-room.git
+   git clone --branch v2.65.38-control-room.1 \
+     https://github.com/alexl83/worldwideview.git worldwideview
+   ```
+
 2. Copy `compose/docker-compose.rpi.yml` into the WWV checkout on the Pi.
 3. Copy the three files under `config/*.env.example` to their documented paths,
    remove the `.example` suffix and fill in the values. Configure watches using
@@ -110,10 +121,17 @@ set `OPENSKY_CLIENT_ID` and `OPENSKY_CLIENT_SECRET` in
 7. From the Mac WWV checkout, configure and deploy:
 
    ```bash
-   TARGET=your-pi.local \
-   PUBLIC_ENGINE_URL=http://your-pi.local:5000 \
+   TARGET=wwv-pi.local \
+   PUBLIC_ENGINE_URL=https://wwv-pi.local/engine \
+   WWV_SOURCE_DIR=/path/to/worldwideview \
    /path/to/this-repo/scripts/build-deploy-arm64.sh
    ```
+
+   `TARGET` is the SSH-reachable Pi hostname. `PUBLIC_ENGINE_URL` is the URL
+   reachable by browsers through Caddy and is embedded in the frontend build.
+   Server-side WWV requests use the private Compose value
+   `WWV_DATA_ENGINE_URL=http://wwv-data-engine:5000`; the legacy
+   `WWV_PLUGIN_DATA_ENGINE_URL` is retained only for rollback compatibility.
 
 See [docs/operations.md](docs/operations.md) for setup, upgrades, recovery and
 validation. See [docs/architecture.md](docs/architecture.md) for trust boundaries.
@@ -141,16 +159,38 @@ supported values and the interaction with the official WhatsApp client.
 This is a personal/LAN control room, not an Internet-facing reference
 architecture. Bind ports 3000 and 5000 to loopback and expose only Caddy to the
 trusted LAN or VPN. Never commit `/etc/*.env`, `.codex`, WhatsApp auth state,
-Chromium profiles or QR
-codes. The relay rejects groups and non-allow-listed numbers and launches Codex in
-read-only mode. Baileys is an unofficial WhatsApp Web client, so use a dedicated
-number and understand the account-risk trade-off.
+Chromium profiles, group JIDs, LIDs or QR codes. Direct control is restricted to
+allow-listed operators. Groups require explicit enrollment; they can receive
+assigned monitor alerts, while only members who are both current WhatsApp group
+administrators and control-room allow-listed operators may administer that
+group's monitors. Groups cannot issue live WWV or globe-control queries. Codex is
+launched in read-only mode. Baileys is an unofficial WhatsApp Web client, so use
+a dedicated number and understand the account-risk trade-off.
+
+## Versions and rollback
+
+The validated reference deployment is:
+
+- WWV fork `v2.65.38-control-room.1`, commit `e7985f58`, based on upstream WWV
+  2.65.37 at `6a6f5403`;
+- control-room `main` with the dated release recorded in the changelog;
+- pre-integration rollback tag `rollback-2026-08-26` in both repositories.
+
+The ARM64 deployment script tags the currently installed WWV image as
+`worldwideview-wwv:rollback` before switching containers and automatically
+restores it when the new container fails its health check. For a deliberate
+source-level rollback, check out `rollback-2026-08-26` in both repositories and
+run the same cross-build procedure. Review [`patches/README.md`](patches/README.md)
+before rebasing onto a newer upstream version: rows marked `Upstream` or
+`Retired` must not be replayed.
 
 ## Status
 
-The pipeline is running on a Raspberry Pi 5 (ARM64) with automatic boot, health
-checks, persistent browser control and deploy rollback. Signal transport is not
-implemented in this repository.
+The reference pipeline runs WWV 2.65.38 on a Raspberry Pi 5 (ARM64) with
+automatic boot, health checks, persistent browser control and deploy rollback.
+WhatsApp supports text, images, voice notes, configurable disappearing messages,
+direct-chat control and group-scoped monitor delivery/administration. Signal
+transport is not implemented in this repository.
 
 ## License
 

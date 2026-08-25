@@ -22,6 +22,10 @@ date on which each operational milestone reached `main`.
   tracked defect is now classified as `Upstream`, `Fork`, `Control Room` or
   `Retired`, and historical commits are explicitly separated from code that is
   still active in the deployment.
+- Updated the primary installation and security guidance for the tagged WWV
+  release, HTTPS engine routing, group authorization and rollback. Hostnames are
+  now expressed as operator-selectable examples rather than deployment-specific
+  names.
 
 ### Fixed
 
