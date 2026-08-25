@@ -310,8 +310,12 @@ The source Dockerfile must accept these build arguments:
 - `NEXT_PUBLIC_WWV_AGENT_BUS_ENABLED=true`
 - `NEXT_PUBLIC_WWV_PLUGIN_DATA_ENGINE_URL=<browser-reachable URL>`
 
-Server-side engine access uses `WWV_PLUGIN_DATA_ENGINE_URL=http://wwv-data-engine:5000`
-from Compose; the public variable is baked into the browser bundle.
+Server-side engine access uses the upstream-standard
+`WWV_DATA_ENGINE_URL=http://wwv-data-engine:5000`. The compose file also keeps
+the legacy `WWV_PLUGIN_DATA_ENGINE_URL` during the transition so older rollback
+images remain operational.
+The private variables are supplied at runtime by Compose; the public variable is
+baked into the browser bundle.
 
 The stack mounts `/srv/worldwideview/seeders-local` read-only into the engine.
 The repository's `seeders/aviation` adapter supplies the civilian OpenSky feed

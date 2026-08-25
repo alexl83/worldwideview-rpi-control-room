@@ -2,9 +2,19 @@
 
 This is the canonical index of upstream defects discovered while building the
 Raspberry Pi control room. It was reconciled against the public issue trackers
-and deployed repositories on 2026-08-04. All listed upstream issues were open at
-that date; an open issue does not mean that the referenced deployment patch is
-untested.
+and deployed repositories on 2026-08-26. The deployed fork now uses upstream
+commit `6a6f5403` as its base and adds a single integration commit on top. The
+table retains the original downstream patch references for traceability even
+when an equivalent fix is now present upstream.
+
+## Current integrated baseline
+
+WWV 2.65.38 in the public fork is based on upstream WWV 2.65.37. It directly
+adopts upstream's fixes for #385, #387, #388, #396, #398 and #409, plus the
+upstream command-stream reconnection work. The integration commit retains only
+deployment-specific or still-unmerged behavior: the authenticated session-pinned
+frontend agent, Places API New support, Map Tiles key verification, no-cache app
+shell and incremental ARM64 Docker layer ordering.
 
 ## WorldWideView application
 
@@ -22,11 +32,13 @@ untested.
 | [WWV #398](https://github.com/silvertakana/worldwideview/issues/398) | Visible Cesium entities could be unselectable when native scene picking returned no tagged WWV primitive. | [`6a22192e`](https://github.com/alexl83/worldwideview/commit/6a22192e) supports promoted glTF IDs; [`5f8059f9`](https://github.com/alexl83/worldwideview/commit/5f8059f9) adds a bounded screen-space fallback and regression tests. |
 | [WWV #409](https://github.com/silvertakana/worldwideview/issues/409) | Plugin enable/disable actions were not persisted and bootstrap re-imported records whose `enabled` flag was false. | [`97119b66`](https://github.com/alexl83/worldwideview/commit/97119b66) persists both actions; [`1fbe8a6c`](https://github.com/alexl83/worldwideview/commit/1fbe8a6c) excludes disabled records during bootstrap. |
 
-The remaining WWV fork extension used by this deployment is not presented as an
-upstream bug:
+The remaining WWV fork extensions used by this deployment are not presented as
+upstream bugs:
 
 - [`0844ef52`](https://github.com/alexl83/worldwideview/commit/0844ef52): session-pinned, authenticated frontend agent chat over the control room's local Unix-socket relay. This is deployment architecture, not a defect in stock WWV.
-- [`7793a928`](https://github.com/alexl83/worldwideview/commit/7793a928): explicitly recreates a terminally closed globe-command `EventSource` with bounded exponential backoff. This operational commit is based on the fork's `main` branch, so it also retains the local-agent launcher and disabled-plugin bootstrap fixes. It keeps an already-open browser tab controllable after a WWV container or reverse-proxy restart instead of requiring a hard refresh.
+- The command-stream reconnection behavior formerly carried by
+  [`7793a928`](https://github.com/alexl83/worldwideview/commit/7793a928) is now
+  supplied by upstream and is no longer an independent fork patch.
 
 ## WWV data engine
 

@@ -16,6 +16,21 @@ date on which each operational milestone reached `main`.
   written to a private temporary file for `codex --image`, and deleted after the
   turn whether it succeeds or fails.
 
+### Changed
+
+- Rebased the deployed WWV fork onto upstream `6a6f5403` (WWV 2.65.37) and
+  released the integrated fork as 2.65.38. The integration adopts upstream's
+  fixes for session creation, data-engine discovery and snapshot normalization,
+  entity selection, disabled-plugin bootstrap and command-stream reconnection,
+  while retaining the control-room frontend agent, Places API New support,
+  Map Tiles key verification and incremental ARM64 Docker layout.
+- Standardized server-side engine routing on upstream's
+  `WWV_DATA_ENGINE_URL`. The legacy `WWV_PLUGIN_DATA_ENGINE_URL` remains in the
+  Compose environment so the pre-integration rollback image still works.
+- Added dated rollback tags for both repositories before the upstream
+  integration (`rollback-2026-08-26`) and took a pre-migration PostgreSQL dump
+  before deploying the new image.
+
 ### Fixed
 
 - Run each Codex CLI turn in a dedicated process group. On timeout the relay now
