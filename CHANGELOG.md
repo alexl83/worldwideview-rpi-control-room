@@ -16,6 +16,13 @@ date on which each operational milestone reached `main`.
   written to a private temporary file for `codex --image`, and deleted after the
   turn whether it succeeds or fails.
 
+### Changed
+
+- Reconciled the patch inventory with the deployed WWV 2.65.38 baseline. Every
+  tracked defect is now classified as `Upstream`, `Fork`, `Control Room` or
+  `Retired`, and historical commits are explicitly separated from code that is
+  still active in the deployment.
+
 ### Fixed
 
 - Run each Codex CLI turn in a dedicated process group. On timeout the relay now
