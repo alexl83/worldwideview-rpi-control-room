@@ -29,6 +29,10 @@ date on which each operational milestone reached `main`.
 
 ### Fixed
 
+- Stop automatic service restarts when WhatsApp explicitly rejects the stored
+  companion credentials with a logged-out response. The relay now records the
+  disconnect reason and exits with a systemd restart-suppression code, avoiding
+  restart storms that interfere with multi-device recovery and diagnostics.
 - Run each Codex CLI turn in a dedicated process group. On timeout the relay now
   interrupts the complete tree and escalates to `SIGKILL` after five seconds,
   preventing orphaned native Codex and code-mode-host processes. `/status`

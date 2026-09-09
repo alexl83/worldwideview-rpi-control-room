@@ -97,6 +97,7 @@ let monitorRuntime;
 let monitorCommandRuntime;
 let monitorTimer;
 let reconnectTimer;
+const LOGGED_OUT_EXIT_CODE = 78;
 let socketGeneration = 0;
 const msgRetryCounterCache = new NodeCache({ stdTTL: 3600, useClones: false });
 
@@ -919,10 +920,20 @@ async function connect() {
       if (generation !== socketGeneration) return;
       const status = lastDisconnect?.error?.output?.statusCode;
       if (status === DisconnectReason.loggedOut) {
-        logger.error("WhatsApp logged out; run wwv-agent login again");
-        process.exit(1);
+        logger.error({
+          status,
+          reason: lastDisconnect?.error?.message,
+        }, "WhatsApp logged out; pairing required; automatic restart suppressed");
+        // EX_CONFIG communicates that the persisted companion credentials are
+        // no longer accepted. The systemd unit explicitly does not restart on
+        // this code, preventing an unbounded login/restart storm that can make
+        // multi-device recovery and diagnostics substantially worse.
+        process.exit(LOGGED_OUT_EXIT_CODE);
       }
-      logger.warn({ status }, "WhatsApp disconnected; reconnecting");
+      logger.warn({
+        status,
+        reason: lastDisconnect?.error?.message,
+      }, "WhatsApp disconnected; reconnecting");
       if (!reconnectTimer) {
         reconnectTimer = setTimeout(() => {
           reconnectTimer = undefined;

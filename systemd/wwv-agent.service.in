@@ -12,6 +12,7 @@ Environment=HOME=@WWV_HOME@
 EnvironmentFile=/etc/wwv-agent.env
 ExecStart=/usr/bin/node /opt/wwv-agent/src/relay.mjs run
 Restart=on-failure
+RestartPreventExitStatus=78
 RestartSec=5
 UMask=0077
 NoNewPrivileges=true
