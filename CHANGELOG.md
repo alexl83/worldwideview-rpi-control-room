@@ -11,6 +11,11 @@ date on which each operational milestone reached `main`.
 
 ### Added
 
+- Integrated WWV's native `find_nearby_entities` proximity search and
+  `get_regional_analytics` clustering tools into the session-pinned MCP
+  endpoint used by the control room.
+- Adopted upstream's alert/condition UI, layer freshness indicators, seeder
+  health diagnostics and deterministic per-layer entity budgets.
 - Forward authorized WhatsApp JPEG, PNG and WebP images to Codex, including
   ephemeral, view-once and image-document wrappers. Media is size-limited,
   written to a private temporary file for `codex --image`, and deleted after the
@@ -18,6 +23,12 @@ date on which each operational milestone reached `main`.
 
 ### Changed
 
+- Updated the deployed WWV baseline from 2.65.38 to the fork release 2.68.3,
+  based on upstream 2.68.2. The integration retains the authenticated local
+  agent chat, browser-session pinning, Places API New compatibility, Map Tiles
+  key verification, no-cache build identity and ARM64-oriented Docker layout.
+- Adopted upstream's runtime edition selection, PostgreSQL readiness gate,
+  parallel boot, marketplace `+esm` resolution and WebSocket BFCache recovery.
 - Reconciled the patch inventory with the deployed WWV 2.65.38 baseline. Every
   tracked defect is now classified as `Upstream`, `Fork`, `Control Room` or
   `Retired`, and historical commits are explicitly separated from code that is

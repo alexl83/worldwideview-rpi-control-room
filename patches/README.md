@@ -2,24 +2,27 @@
 
 This is the canonical index of upstream defects discovered while building the
 Raspberry Pi control room. It was reconciled against the public issue trackers
-and deployed repositories on 2026-08-26. The deployed fork now uses upstream
-commit `6a6f5403` as its base and adds a single integration commit on top. The
+and deployed repositories on 2026-09-09. The deployed fork now includes
+upstream through commit `954444f1` (WWV 2.68.2), followed by the conservative
+integration commit [`e0492563`](https://github.com/alexl83/worldwideview/commit/e0492563). The
 table retains the original downstream patch references for traceability even
 when an equivalent fix is now present upstream.
 
 ## Current integrated baseline
 
-WWV 2.65.38 in the public fork is based on upstream WWV 2.65.37. It directly
+WWV 2.68.3 in the public fork is based on upstream WWV 2.68.2. It directly
 adopts upstream's fixes for #385, #387, #388, #396, #398 and #409, plus the
-upstream command-stream reconnection work. The integration commit retains only
-deployment-specific or still-unmerged behavior: the authenticated session-pinned
-frontend agent, Places API New support, Map Tiles key verification, no-cache app
-shell and incremental ARM64 Docker layer ordering.
+upstream command-stream reconnection work. It also adopts native proximity and
+regional-analytics MCP tools, alert conditions, feed freshness and seeder-health
+diagnostics. The integration commit retains only deployment-specific or
+still-unmerged behavior: the authenticated session-pinned frontend agent,
+Places API New support, Map Tiles key verification, no-cache app shell and
+incremental ARM64 Docker layer ordering.
 
 ## WorldWideView application
 
 The **deployed source** column describes what is present in
-`v2.65.38-control-room.1`. Historical fork commits remain linked only as an
+`v2.68.3-control-room.1`. Historical fork commits remain linked only as an
 audit trail; they must not be reapplied when the row says **Upstream**.
 
 | Issue | Observed defect | Status | Deployed source |
@@ -40,7 +43,8 @@ audit trail; they must not be reapplied when the row says **Upstream**.
 The remaining WWV fork extensions used by this deployment are not presented as
 upstream bugs:
 
-- [`e7985f58`](https://github.com/alexl83/worldwideview/commit/e7985f58):
+- [`e0492563`](https://github.com/alexl83/worldwideview/commit/e0492563), retaining
+  [`e7985f58`](https://github.com/alexl83/worldwideview/commit/e7985f58):
   session-pinned, authenticated frontend agent chat over the control room's
   local Unix-socket relay, including server-side MCP session pinning. Historical
   implementation: [`0844ef52`](https://github.com/alexl83/worldwideview/commit/0844ef52).
