@@ -241,6 +241,37 @@ The supplied Caddyfile also exposes `127.0.0.1:3080/mcp/headless`. Do not change
 that listener to `0.0.0.0`: it exists only so Codex can reach a session-pinned MCP
 endpoint without putting the UUID in its URL query string.
 
+## Network exposure and paid API safety
+
+This deployment is designed for a trusted LAN or private overlay VPN. Do not
+publish Caddy, WWV, MCP, the agent socket, PostgreSQL, Redis or the data engine on
+the public Internet, and do not create router port-forwarding rules for their
+ports. For remote access, use an authenticated private network such as WireGuard,
+Tailscale or ZeroTier and expose only the Caddy HTTPS entry point inside that
+network. Keep the application containers and headless MCP listener private.
+
+A locally trusted Caddy certificate provides transport security and server
+identity; it does not make a publicly reachable service safe. Retain application
+authentication, WhatsApp number/LID allow-lists, group enrollment and the
+loopback-only MCP binding even when all clients use HTTPS.
+
+For billable third-party APIs:
+
+- create separate keys for browser and server workloads;
+- grant each key only the exact API it needs;
+- constrain browser keys to every approved HTTPS referrer and nothing else;
+- constrain server keys to a stable public egress IP with a `/32` restriction
+  when the provider supports it;
+- configure provider-side quotas, budgets and billing alerts;
+- rotate credentials after disclosure and remove superseded keys after the
+  rollback window closes;
+- never store keys in Git, documentation, screenshots, logs or public images.
+
+Browser credentials cannot be secret because the client must receive them.
+Their API and referrer restrictions are the security control. An IP-restricted
+server key stops working when the site's public egress address changes; update
+the restriction deliberately rather than removing it.
+
 ## Google Maps and place search
 
 Use two different credentials. Store only `GOOGLE_MAPS_API_KEY` in the Pi's

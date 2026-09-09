@@ -23,6 +23,9 @@ date on which each operational milestone reached `main`.
 
 ### Changed
 
+- Added an explicit private-network deployment warning and operational guidance
+  for VPN access, closed internal ports, paid-API restrictions, quotas, budgets,
+  credential rotation and the intentionally public nature of browser API keys.
 - Split Google Maps credentials by trust boundary: the cross-build now accepts a
   Map Tiles-only browser key, while Places uses a separate server-side key that
   can be restricted to the deployment egress IP.

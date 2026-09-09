@@ -29,8 +29,23 @@ loopback-only MCP alias pinned to the headless globe. Replace `wwv-pi.local` in
 the examples with the LAN or VPN DNS name assigned to your Raspberry Pi.
 
 No OpenAI API key is required: the service account authenticates the Codex CLI
-with an eligible ChatGPT subscription. WorldWideView and Google Maps credentials
-remain in root-owned environment files on the Pi.
+with an eligible ChatGPT subscription. Private WorldWideView and server-side
+Google credentials remain in root-owned environment files on the Pi; the
+Map Tiles browser key is compiled into the frontend and must be restricted.
+
+> [!WARNING]
+> **Do not expose this stack directly to the public Internet.** Put remote access
+> behind a private VPN such as WireGuard, Tailscale or ZeroTier. Keep WWV, MCP,
+> PostgreSQL, Redis and the data engine on loopback or private container networks,
+> and do not publish their ports through router forwarding. HTTPS protects traffic
+> but does not replace a VPN or the application's authorization controls.
+>
+> Protect billable APIs independently: use separate browser and server keys,
+> allow only the required API on each, restrict browser keys to approved HTTPS
+> referrers and server keys to a stable egress IP where possible, and configure
+> quotas, budgets and billing alerts. Browser keys are visible by design;
+> restrictions, not concealment, prevent unauthorized use. Never commit
+> credentials or include them in logs, screenshots or public container images.
 
 ## What is included
 
@@ -71,7 +86,7 @@ sudo-capable operator account.
 
 The WorldWideView source and the data-engine image are intentionally not
 vendored. The reproducible reference release uses the public WWV fork tag
-`v2.65.38-control-room.1`; use that tag rather than replaying historical patches
+`v2.68.3-control-room.1`; use that tag rather than replaying historical patches
 individually. This repository remains the deployment and control plane.
 
 The local Aviation seeder supplies the OpenSky endpoint expected by the official
@@ -87,7 +102,7 @@ set `OPENSKY_CLIENT_ID` and `OPENSKY_CLIENT_SECRET` in
 
    ```bash
    git clone https://github.com/alexl83/worldwideview-rpi-control-room.git
-   git clone --branch v2.65.38-control-room.1 \
+   git clone --branch v2.68.3-control-room.1 \
      https://github.com/alexl83/worldwideview.git worldwideview
    ```
 
@@ -175,8 +190,9 @@ a dedicated number and understand the account-risk trade-off.
 
 The validated reference deployment is:
 
-- WWV fork `v2.65.38-control-room.1`, commit `e7985f58`, based on upstream WWV
-  2.65.37 at `6a6f5403`;
+- WWV fork [`v2.68.3-control-room.1`](https://github.com/alexl83/worldwideview/releases/tag/v2.68.3-control-room.1),
+  commit [`e0492563`](https://github.com/alexl83/worldwideview/commit/e0492563),
+  based on upstream WWV 2.68.2;
 - control-room `main` with the dated release recorded in the changelog;
 - pre-integration rollback tag `rollback-2026-08-26` in both repositories.
 
