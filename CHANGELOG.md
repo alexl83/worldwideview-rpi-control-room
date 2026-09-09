@@ -23,6 +23,9 @@ date on which each operational milestone reached `main`.
 
 ### Changed
 
+- Split Google Maps credentials by trust boundary: the cross-build now accepts a
+  Map Tiles-only browser key, while Places uses a separate server-side key that
+  can be restricted to the deployment egress IP.
 - Updated the deployed WWV baseline from 2.65.38 to the fork release 2.68.3,
   based on upstream 2.68.2. The integration retains the authenticated local
   agent chat, browser-session pinning, Places API New compatibility, Map Tiles

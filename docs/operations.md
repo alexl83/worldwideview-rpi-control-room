@@ -243,15 +243,20 @@ endpoint without putting the UUID in its URL query string.
 
 ## Google Maps and place search
 
-Set both `GOOGLE_MAPS_API_KEY` and `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` in
-`/etc/worldwideview.env`. The public value is compiled into the browser bundle;
-changing it requires a WWV rebuild, while the private value is used by the
-server-side place search routes. Enable Map Tiles API for Photorealistic 3D Tiles
-and Places API (New) for addresses and city search. The fork uses the current
-Places `searchText` and details endpoints rather than the legacy Places service.
+Use two different credentials. Store only `GOOGLE_MAPS_API_KEY` in the Pi's
+root-owned `/etc/worldwideview.env`; it is consumed by the server-side place
+search routes. Pass the public credential as `GOOGLE_MAPS_BROWSER_KEY` to the
+Mac cross-build script, which compiles it into `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`.
+Changing the public value therefore requires a WWV rebuild. Enable Map Tiles API
+for Photorealistic 3D Tiles and Places API (New) for addresses and city search.
+The fork uses the current Places `searchText` and details endpoints rather than
+the legacy Places service.
 
-Restrict the browser key by the HTTPS origin and the server key by the deployment
-environment where practical. A successful 3D globe does not prove Places is
+Restrict the browser key to `tile.googleapis.com` and the deployment's HTTPS
+referrers (for example `https://wwv-pi.local/*`). Restrict the server key to
+`places.googleapis.com` and the deployment's stable public egress IP using a
+single-host CIDR such as `203.0.113.10/32`. If that address changes, update the
+restriction before expecting search to work. A successful 3D globe does not prove Places is
 enabled: validate search separately through `/api/places/search`. Conversely, a
 working Places response does not prove Map Tiles entitlement. Never put a real
 key in this repository or a screenshot.
@@ -295,12 +300,13 @@ checkout containing the deployment patches:
 ```bash
 WWV_SOURCE_DIR="$PWD" \
 TARGET=your-pi.local \
-PUBLIC_ENGINE_URL=http://your-pi.local:5000 \
+PUBLIC_ENGINE_URL=https://your-pi.local/engine \
+GOOGLE_MAPS_BROWSER_KEY='restricted-map-tiles-key' \
 /path/to/worldwideview-rpi-control-room/scripts/build-deploy-arm64.sh
 ```
 
-For the Caddy configuration in this repository, build with
-`PUBLIC_ENGINE_URL=https://porpolino.local/engine`.
+For the Caddy configuration in this repository, use the HTTPS hostname selected
+for the deployment.
 
 Use `--sync-from-pi` only if the Pi checkout is the source of truth. It deliberately
 excludes dependencies and build artifacts.
@@ -308,6 +314,7 @@ excludes dependencies and build artifacts.
 The source Dockerfile must accept these build arguments:
 
 - `NEXT_PUBLIC_WWV_AGENT_BUS_ENABLED=true`
+- `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` (supplied by `GOOGLE_MAPS_BROWSER_KEY`)
 - `NEXT_PUBLIC_WWV_PLUGIN_DATA_ENGINE_URL=<browser-reachable URL>`
 
 Server-side engine access uses the upstream-standard

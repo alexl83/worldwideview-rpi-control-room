@@ -14,6 +14,7 @@ readonly REMOTE_SOURCE_DIR="${REMOTE_SOURCE_DIR:-/srv/worldwideview}"
 readonly COMPOSE_FILE="${COMPOSE_FILE:-/srv/worldwideview/docker-compose.rpi.yml}"
 readonly ENV_FILE="${ENV_FILE:-/etc/worldwideview.env}"
 readonly PUBLIC_ENGINE_URL="${PUBLIC_ENGINE_URL:-http://${TARGET}:5000}"
+readonly GOOGLE_MAPS_BROWSER_KEY="${GOOGLE_MAPS_BROWSER_KEY:-}"
 
 for command in colima docker ssh rsync; do
   command -v "$command" >/dev/null || { echo "Missing dependency: $command" >&2; exit 1; }
@@ -41,6 +42,7 @@ fi
 docker buildx build --load --platform linux/arm64 \
   --build-arg NEXT_PUBLIC_WWV_AGENT_BUS_ENABLED=true \
   --build-arg "NEXT_PUBLIC_WWV_PLUGIN_DATA_ENGINE_URL=${PUBLIC_ENGINE_URL}" \
+  --build-arg "NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_BROWSER_KEY}" \
   --tag "$IMAGE" --tag "$REGISTRY_IMAGE" "$WWV_SOURCE_DIR"
 docker push "$REGISTRY_IMAGE"
 

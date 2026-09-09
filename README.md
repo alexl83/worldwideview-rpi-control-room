@@ -123,12 +123,16 @@ set `OPENSKY_CLIENT_ID` and `OPENSKY_CLIENT_SECRET` in
    ```bash
    TARGET=wwv-pi.local \
    PUBLIC_ENGINE_URL=https://wwv-pi.local/engine \
+   GOOGLE_MAPS_BROWSER_KEY='restricted-map-tiles-key' \
    WWV_SOURCE_DIR=/path/to/worldwideview \
    /path/to/this-repo/scripts/build-deploy-arm64.sh
    ```
 
    `TARGET` is the SSH-reachable Pi hostname. `PUBLIC_ENGINE_URL` is the URL
    reachable by browsers through Caddy and is embedded in the frontend build.
+   `GOOGLE_MAPS_BROWSER_KEY` is likewise embedded and must be restricted to the
+   Map Tiles API and the deployment's HTTPS origins. Keep the separate Places
+   key only in the Pi's root-owned `/etc/worldwideview.env`.
    Server-side WWV requests use the private Compose value
    `WWV_DATA_ENGINE_URL=http://wwv-data-engine:5000`; the legacy
    `WWV_PLUGIN_DATA_ENGINE_URL` is retained only for rollback compatibility.
