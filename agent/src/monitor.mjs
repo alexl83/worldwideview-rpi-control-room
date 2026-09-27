@@ -343,7 +343,7 @@ export class MonitorRuntime {
           // state document. Parallel writes could drop another monitor's state.
           await this.run(monitor.id);
         } catch (error) {
-          this.logger.error({ error, id: monitor.id }, "monitor failed");
+          this.logger.error({ err: error, id: monitor.id }, "monitor failed");
         }
       }
     }

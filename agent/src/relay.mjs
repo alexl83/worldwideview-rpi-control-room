@@ -315,7 +315,7 @@ async function runCodex(threadId, prompt, options = {}) {
             finalText = event.item.text ?? finalText;
           }
         } catch (error) {
-          logger.warn({ error, line }, "invalid Codex JSONL event");
+          logger.warn({ err: error, line }, "invalid Codex JSONL event");
         }
       }
     });
@@ -412,7 +412,7 @@ function startFrontendServer() {
   }
   const server = http.createServer((request, response) => {
     handleFrontendChat(request, response).catch((error) => {
-      logger.error({ error }, "frontend request handler failed");
+      logger.error({ err: error }, "frontend request handler failed");
       if (!response.headersSent) sendJson(response, 500, { error: "internal error" });
     });
   });
@@ -447,7 +447,7 @@ async function analyzeMonitor(monitor, result) {
     const response = await runCodex(null, monitorPrompt(monitor, result));
     if (response.text?.trim()) return response.text.trim();
   } catch (error) {
-    logger.error({ error, monitor: monitor.id }, "monitor analysis failed");
+    logger.error({ err: error, monitor: monitor.id }, "monitor analysis failed");
   }
   const first = result.triggered[0];
   return [
@@ -515,7 +515,7 @@ async function handleGroupMessage(sock, msg) {
   try {
     metadata = await sock.groupMetadata(jid);
   } catch (error) {
-    logger.warn({ error, jid }, "WhatsApp group metadata unavailable");
+    logger.warn({ err: error, jid }, "WhatsApp group metadata unavailable");
     return;
   }
 
@@ -530,7 +530,7 @@ async function handleGroupMessage(sock, msg) {
       await sendGroupReply(sock, msg, `Gruppo registrato come “${group.id}”. Gli amministratori WhatsApp possono ora gestire esclusivamente i monitor assegnati a questo gruppo. Le interrogazioni live restano disabilitate.`);
       logger.info({ groupId: group.id }, "WhatsApp monitor group enrolled");
     } catch (error) {
-      logger.warn({ error, jid }, "WhatsApp group enrollment failed");
+      logger.warn({ err: error, jid }, "WhatsApp group enrollment failed");
       await sendGroupReply(sock, msg, `Associazione gruppo non riuscita: ${error.message}`);
     }
     return;
@@ -635,7 +635,7 @@ async function handleGroupMessage(sock, msg) {
       await sendGroupReply(sock, msg, "Comandi amministratori del gruppo: /monitor list, /monitor assign <id>, /monitor unassign <id>, /monitor show <id>, /monitor create, /monitor confirm <codice>, /monitor cancel [codice], /monitor enable|disable <id>, /monitor brief <id>. Le interrogazioni live non sono abilitate.");
     }
   } catch (error) {
-    logger.error({ error, groupId: group.id }, "group monitor command failed");
+    logger.error({ err: error, groupId: group.id }, "group monitor command failed");
     await sendGroupReply(sock, msg, `Comando monitor non riuscito: ${error.message}`);
   }
 }
@@ -806,7 +806,7 @@ async function handleMessage(sock, msg) {
       } catch (error) {
         // The full text has already been delivered, so a TTS failure never
         // suppresses or replaces the actual answer.
-        logger.error({ error, jid }, "voice reply synthesis failed");
+        logger.error({ err: error, jid }, "voice reply synthesis failed");
         await sock.sendMessage(jid, { text: `Risposta vocale non disponibile: ${error.message}` });
       }
     }
@@ -887,7 +887,7 @@ async function connect() {
         try {
           fs.accessSync(monitorsFile, fs.constants.R_OK);
         } catch (error) {
-          logger.warn({ error, monitorsFile }, "monitor configuration is not readable; monitoring disabled");
+          logger.warn({ err: error, monitorsFile }, "monitor configuration is not readable; monitoring disabled");
         }
         monitorRuntime = new MonitorRuntime({
           configFile: monitorsFile,
@@ -910,9 +910,9 @@ async function connect() {
         monitorRuntime.notify = (monitor, text) => notifyMonitor(sock, monitor, text);
       }
       if (!monitorTimer) {
-        monitorRuntime.tick().catch((error) => logger.error({ error }, "initial monitor tick failed"));
+        monitorRuntime.tick().catch((error) => logger.error({ err: error }, "initial monitor tick failed"));
         monitorTimer = setInterval(() => {
-          monitorRuntime.tick().catch((error) => logger.error({ error }, "monitor tick failed"));
+          monitorRuntime.tick().catch((error) => logger.error({ err: error }, "monitor tick failed"));
         }, 30_000);
       }
     }
@@ -937,7 +937,7 @@ async function connect() {
       if (!reconnectTimer) {
         reconnectTimer = setTimeout(() => {
           reconnectTimer = undefined;
-          connect().catch((error) => logger.error({ error }, "reconnect failed"));
+          connect().catch((error) => logger.error({ err: error }, "reconnect failed"));
         }, 3000);
       }
     }
@@ -945,7 +945,7 @@ async function connect() {
   if (mode === "run") {
     sock.ev.on("messages.upsert", ({ messages, type }) => {
       if (type !== "notify") return;
-      for (const msg of messages) handleMessage(sock, msg).catch((error) => logger.error({ error }, "message handler failed"));
+      for (const msg of messages) handleMessage(sock, msg).catch((error) => logger.error({ err: error }, "message handler failed"));
     });
   }
 }

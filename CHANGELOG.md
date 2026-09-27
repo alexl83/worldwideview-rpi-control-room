@@ -46,6 +46,9 @@ date on which each operational milestone reached `main`.
 
 ### Fixed
 
+- Serialize runtime exceptions through Pino's standard `err` field so monitor,
+  Codex, WhatsApp, frontend and voice failures retain their message, code and
+  stack instead of appearing in diagnostics as an empty object.
 - Stop automatic service restarts when WhatsApp explicitly rejects the stored
   companion credentials with a logged-out response. The relay now records the
   disconnect reason and exits with a systemd restart-suppression code, avoiding
