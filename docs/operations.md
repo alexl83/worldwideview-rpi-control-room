@@ -1,5 +1,28 @@
 # Operations
 
+## AI operator workflow
+
+From a repository checkout, invoke `$wwv-control-room` to load the operator
+skill at `.agents/skills/wwv-control-room/SKILL.md`. Agents that support
+repository skill discovery may load it automatically; other harnesses should
+read the root `AGENTS.md` first and then open the skill explicitly.
+
+The skill routes work to focused installation/deployment, operations/recovery
+or upstream-maintenance references while treating this document as the canonical
+command-level operations guide. It runs on the operator side and is not a
+service, package or container dependency on the Raspberry Pi.
+
+Before allowing an agent to act, provide or configure the intended repository
+checkout and private SSH target through the harness without committing them.
+Keep `/etc/*.env`, Codex OAuth state, WhatsApp authentication, QR images,
+browser profiles, recipient identities and monitor state outside the repository.
+An assessment or diagnostic request authorizes inspection, not deployment or
+other production mutation.
+
+When this document gains or changes a recovery procedure, update the matching
+skill reference in the same commit. Conversely, do not copy the complete skill
+playbook here: this file remains the human-facing operational source.
+
 ## First installation
 
 Clone WWV to `/srv/worldwideview` on the Pi. Put the Compose file there and build

@@ -157,6 +157,28 @@ set `OPENSKY_CLIENT_ID` and `OPENSKY_CLIENT_SECRET` in
 See [docs/operations.md](docs/operations.md) for setup, upgrades, recovery and
 validation. See [docs/architecture.md](docs/architecture.md) for trust boundaries.
 
+## AI-assisted operation
+
+AI agents working from this checkout can use the repository-native
+[`wwv-control-room` skill](.agents/skills/wwv-control-room/SKILL.md). Invoke it
+explicitly as `$wwv-control-room`; compatible harnesses may discover it
+automatically from `.agents/skills/`. The root [`AGENTS.md`](AGENTS.md) provides
+a compact routing and safety baseline for harnesses that read repository
+instructions but do not auto-load skills.
+
+The skill is source-controlled operator guidance, not a Raspberry Pi runtime
+dependency. It does not need to be copied to `/opt`, installed as a systemd
+service or added to the container image. It reads the existing README,
+architecture, operations and patch inventory as canonical sources, then loads
+focused procedures for installation/deployment, recovery or upstream
+maintenance only when needed.
+
+No private deployment values belong in the skill. Hostnames, SSH users,
+telephone numbers, WhatsApp LIDs/group JIDs, API keys and OAuth/device state
+remain in the private host configuration documented elsewhere. Whenever a
+change alters architecture, deployment, recovery or retained fork behavior,
+update the corresponding canonical document and skill reference together.
+
 ## Interaction surfaces
 
 | Surface | Globe session | Input/output |
