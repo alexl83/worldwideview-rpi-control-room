@@ -70,6 +70,8 @@ Map Tiles browser key is compiled into the frontend and must be restricted.
 - `plugins/aviation/`: same-origin compatibility wrapper that prevents the
   official Aviation plugin from falling back to an incorrect/cloud engine URL.
 - `scripts/`: Pi installer plus ARM64 cross-build/deploy with automatic rollback.
+- `.agents/skills/wwv-control-room/`: repository-native AI operator skill for
+  installation, deployment, diagnostics, recovery and upstream maintenance.
 - `systemd/`: hardened, boot-enabled service templates.
 - `config/`: secret-free configuration examples and Codex/WWV agent guidance.
 - `patches/`: canonical inventory that classifies each fix as supplied by

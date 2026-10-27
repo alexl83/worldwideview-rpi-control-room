@@ -1,0 +1,4 @@
+interface:
+  display_name: "WWV Control Room"
+  short_description: "Operate and maintain a self-hosted WWV control room"
+  default_prompt: "Use $wwv-control-room to inspect and safely manage this WorldWideView control-room deployment."

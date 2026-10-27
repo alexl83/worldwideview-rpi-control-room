@@ -11,6 +11,9 @@ date on which each operational milestone reached `main`.
 
 ### Added
 
+- Added the repository-native `wwv-control-room` AI operator skill, with routed
+  guidance for safe installation/deployment, live operations and recovery, and
+  upstream/fork maintenance without embedding deployment-specific secrets.
 - Integrated WWV's native `find_nearby_entities` proximity search and
   `get_regional_analytics` clustering tools into the session-pinned MCP
   endpoint used by the control room.
